@@ -8,10 +8,10 @@ This setup is built from the ground up to be my own, reflecting the tools and se
 
 ## ✨ Features
 
-  * **Plugin Management with `lazy.nvim`**: Fast, declarative, and easy to manage plugins.
-  * **Broad Language Support**: Pre-configured support for a wide array of languages using Neovim's native LSP and Tree-sitter.
-  * **Functional UI**: A clean and practical user interface, featuring `Nvim-tree` for file system navigation.
-  * **Personalized Experience**: Keymaps and settings are fine-tuned for my personal productivity.
+- **Plugin Management with `lazy.nvim`**: Fast, declarative, and easy to manage plugins.
+- **Broad Language Support**: Pre-configured support for a wide array of languages using Neovim's native LSP and Tree-sitter.
+- **Functional UI**: A clean and practical user interface, featuring `Nvim-tree` for file system navigation.
+- **Personalized Experience**: Keymaps and settings are fine-tuned for my personal productivity.
 
 ## 🛠️ Supported Languages
 
@@ -19,16 +19,16 @@ This configuration is optimized to work with the following languages out of the 
 
 `c` `cpp` `csharp` `cmake` `css` `scss` `dockerfile` `go` `graphql` `html` `java` `javascript` `typescript` `tsx` `json` `lua` `make` `markdown` `python` `bash` `powershell` `query` `regex` `sql` `xml` `yaml` `vim` `vimdoc`
 
-*...and more as my needs evolve.*
+_...and more as my needs evolve._
 
 ## 🚀 Installation
 
 **Prerequisites:**
 
-  * **Neovim v0.9.0+**
-  * **Git** (for cloning the repository and managing plugins)
-  * A **Nerd Font** (for icons to display correctly)
-  * Basic build tools (like `make`, `gcc`, etc.) for compiling some plugins.
+- **Neovim v0.9.0+**
+- **Git** (for cloning the repository and managing plugins)
+- A **Nerd Font** (for icons to display correctly)
+- Basic build tools (like `make`, `gcc`, etc.) for compiling some plugins.
 
 ### Steps
 
@@ -45,7 +45,7 @@ This configuration is optimized to work with the following languages out of the 
     git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git ~/.config/nvim
     ```
 
-    *(Remember to replace `YOUR_USERNAME/YOUR_REPO_NAME.git` with your actual repository URL.)*
+    _(Remember to replace `YOUR_USERNAME/YOUR_REPO_NAME.git` with your actual repository URL.)_
 
 3.  **Launch Neovim:**
 
