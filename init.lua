@@ -1,17 +1,17 @@
--- Para executar comandos como :colorscheme, vim.cmd ainda é a forma correta.
-vim.cmd.colorscheme("elflord") -- Uma forma alternativa e mais "Lua" de chamar o comando.
+-- To execute commands like :colorscheme, vim.cmd is still the correct way.
+vim.cmd.colorscheme("elflord") -- An alternative and more "Lua-like" way to call the command.
 
--- Opções de Indentação
-vim.opt.expandtab = true        -- Usar espaços em vez de tabs
-vim.opt.tabstop = 2             -- Um tab equivale a 2 espaços
-vim.opt.softtabstop = 2         -- Quantos espaços inserir ao apertar <Tab>
-vim.opt.shiftwidth = 2          -- Quantos espaços usar para indentação automática
-vim.opt.autoindent = true       -- Copiar a indentação da linha anterior
+-- Indentation Options
+vim.opt.expandtab = true        -- Use spaces instead of tabs
+vim.opt.tabstop = 2             -- A tab is equivalent to 2 spaces
+vim.opt.softtabstop = 2         -- How many spaces to insert when pressing <Tab>
+vim.opt.shiftwidth = 2          -- How many spaces to use for automatic indentation
+vim.opt.autoindent = true       -- Copy indentation from the previous line
 
--- Interface do Editor
-vim.opt.number = true           -- Mostrar número das linhas
-vim.opt.relativenumber = true   -- Mostrar número relativo das linhas (ótimo para navegação)
-vim.opt.mouse = 'a'             -- Habilitar o mouse em todos os modos
+-- Editor Interface
+vim.opt.number = true           -- Show line numbers
+vim.opt.relativenumber = true   -- Show relative line numbers (great for navigation)
+vim.opt.mouse = 'a'             -- Enable the mouse in all modes
 
 -- Bootstrap lazy.nvim
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
@@ -107,4 +107,3 @@ require("lazy").setup({
   -- automatically check for plugin updates
   checker = { enabled = true },
 })
-
