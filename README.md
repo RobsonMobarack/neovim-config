@@ -42,10 +42,8 @@ _...and more as my needs evolve._
 2.  **Clone this repository:**
 
     ```bash
-    git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git ~/.config/nvim
+    git clone https://github.com/RobsonMobarack/neovim-config.git ~/.config/nvim
     ```
-
-    _(Remember to replace `YOUR_USERNAME/YOUR_REPO_NAME.git` with your actual repository URL.)_
 
 3.  **Launch Neovim:**
 
