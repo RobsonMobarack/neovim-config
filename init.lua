@@ -1,19 +1,38 @@
--- To execute commands like :colorscheme, vim.cmd is still the correct way.
-vim.cmd.colorscheme("elflord") -- An alternative and more "Lua-like" way to call the command.
+-- =========================
+-- Neovim Configuration File
+-- Author: Robson Mobarack
+-- =========================
 
--- Indentation Options
+-- Set colorscheme
+vim.cmd.colorscheme("elflord")
+
+-- Indentation settings
 vim.opt.expandtab = true        -- Use spaces instead of tabs
-vim.opt.tabstop = 2             -- A tab is equivalent to 2 spaces
-vim.opt.softtabstop = 2         -- How many spaces to insert when pressing <Tab>
-vim.opt.shiftwidth = 2          -- How many spaces to use for automatic indentation
-vim.opt.autoindent = true       -- Copy indentation from the previous line
+vim.opt.tabstop = 2             -- Number of spaces a tab counts for
+vim.opt.softtabstop = 2         -- Number of spaces inserted when pressing <Tab>
+vim.opt.smarttab = true         -- Smart handling of tabs
+vim.opt.shiftwidth = 2          -- Indentation width
+vim.opt.autoindent = true       -- Maintain indentation from previous line
+vim.opt.smartindent = true      -- Smart automatic indentation
 
--- Editor Interface
-vim.opt.number = true           -- Show line numbers
-vim.opt.relativenumber = true   -- Show relative line numbers (great for navigation)
-vim.opt.mouse = 'a'             -- Enable the mouse in all modes
+-- UI settings
+vim.opt.number = true           -- Show absolute line numbers
+vim.opt.relativenumber = true   -- Show relative line numbers
+vim.opt.mouse = 'a'             -- Enable mouse support
+vim.opt.completeopt = "menuone,noselect" -- Better completion menu behavior
+vim.opt.termguicolors = true    -- Enable 24-bit RGB colors
+vim.opt.signcolumn = "yes"      -- Always show sign column to avoid flicker
+vim.opt.updatetime = 250        -- Faster diagnostics update
+vim.opt.timeoutlen = 300        -- Shorter mapped sequence timeout
 
--- Bootstrap lazy.nvim
+-- Persistent undo settings
+vim.opt.undofile = true                               -- Enable persistent undo
+vim.opt.undodir = vim.fn.stdpath('data') .. '/undodir'     -- Set undo directory (Windows)
+-- vim.opt.undodir = vim.fn.expand('~/.vim/undodir')     -- Set undo directory (Linux)
+
+-- =========================
+-- Lazy.nvim Bootstrap
+-- =========================
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
   local lazyrepo = "https://github.com/folke/lazy.nvim.git"
@@ -30,71 +49,130 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
--- Make sure to setup `mapleader` and `maplocalleader` before
--- loading lazy.nvim so that mappings are correct.
--- This is also a good place to setup other settings (vim.opt)
+-- Leader keys
 vim.g.mapleader = " "
 vim.g.maplocalleader = "\\"
 
--- Setup lazy.nvim
+-- =========================
+-- Plugin Setup with lazy.nvim
+-- =========================
 require("lazy").setup({
   spec = {
-    -- add your plugins here
+    -- LSP Configuration
+    {
+      "neovim/nvim-lspconfig",
+      dependencies = {
+        "williamboman/mason.nvim",
+        "williamboman/mason-lspconfig.nvim",
+        "WhoIsSethDaniel/mason-tool-installer.nvim",
+      },
+      config = function()
+        -- Function executed when LSP attaches to buffer
+        local on_attach = function(client, bufnr)
+          vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
+          local opts = { noremap = true, silent = true, buffer = bufnr }
+
+          -- Keymaps for LSP features
+          vim.keymap.set("n", "gD", vim.lsp.buf.declaration, opts)
+          vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
+          vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
+          vim.keymap.set("n", "gi", vim.lsp.buf.implementation, opts)
+          vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, opts)
+          vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, opts)
+          vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, opts)
+          vim.keymap.set("n", "<leader>wl", function()
+            print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+          end, opts)
+          vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, opts)
+          vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
+          vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, opts)
+          vim.keymap.set("n", "gr", vim.lsp.buf.references, opts)
+          vim.keymap.set("n", "<leader>f", function()
+            vim.lsp.buf.format { async = true }
+          end, opts)
+        end
+
+        -- Mason setup
+        require("mason").setup()
+
+        -- Mason-LSPConfig setup
+        require("mason-lspconfig").setup({
+          ensure_installed = {
+            "lua_ls",
+            "ts_ls",
+            "pyright",
+            "gopls",
+            "html",
+            "cssls",
+            "angularls",
+            "bashls",
+            "clangd",
+          },
+          handlers = {
+            function(server_name)
+              require("lspconfig")[server_name].setup({ on_attach = on_attach })
+            end,
+            ["lua_ls"] = function()
+              require("lspconfig").lua_ls.setup({
+                on_attach = on_attach,
+                settings = {
+                  Lua = {
+                    diagnostics = { globals = { "vim" } },
+                  },
+                },
+              })
+            end,
+          },
+        })
+
+        -- Mason Tool Installer for linters/formatters/test tools
+        require("mason-tool-installer").setup({
+          ensure_installed = { "gotestsum", "eslint_d", "prettier" },
+        })
+
+        -- Disable virtual text for diagnostics (cleaner look)
+        vim.diagnostic.config({ virtual_text = false })
+      end,
+    },
+
+    -- Telescope Configuration (fuzzy finder)
     {
       'nvim-telescope/telescope.nvim',
       tag = '0.1.8',
       dependencies = { 'nvim-lua/plenary.nvim' },
       config = function()
         local builtin = require('telescope.builtin')
+        require('telescope').setup({
+          defaults = { file_ignore_patterns = { "node_modules", "%.git/" } }
+        })
         vim.keymap.set('n', '<leader>ff', builtin.find_files, { desc = 'Telescope find files' })
         vim.keymap.set('n', '<leader>fg', builtin.live_grep, { desc = 'Telescope live grep' })
         vim.keymap.set('n', '<leader>fb', builtin.buffers, { desc = 'Telescope buffers' })
         vim.keymap.set('n', '<leader>fh', builtin.help_tags, { desc = 'Telescope help tags' })
       end
     },
+
+    -- Treesitter Configuration (syntax highlighting and parsing)
     {
       "nvim-treesitter/nvim-treesitter",
-      branch = 'master', lazy = false,
       build = ":TSUpdate",
       config = function()
         require('nvim-treesitter.configs').setup({
-          -- A list of parser names, or "all" (the listed parsers MUST always be installed)
-          ensure_installed = { "c", "angular", "vim", "vimdoc", "query", "bash", "markdown_inline", "cmake", "comment", "cpp", "css", "disassembly", "dockerfile", "git_config", "git_rebase", "gitcommit", "gitignore", "go", "gomod", "gosum", "gotmpl", "gowork", "graphql", "html", "java", "javadoc", "javascript", "json", "json5", "lua", "make", "nginx", "powershell", "python", "regex", "robot", "robots", "scss", "sql", "tsx", "typescript", "xml", "yaml" },
-
-          -- Install parsers synchronously (only applied to `ensure_installed`)
+          ensure_installed = {
+            "lua", "vim", "vimdoc", "bash", "html", "typescript", "javascript",
+            "css", "json", "yaml", "go", "python", "cpp", "c", "sql", "markdown"
+          },
           sync_install = false,
-
-          -- Automatically install missing parsers when entering buffer
-          -- Recommendation: set to false if you don't have `tree-sitter` CLI installed locally
           auto_install = true,
-
-          -- List of parsers to ignore installing (or "all")
-          ignore_install = { "javascript" },
-
-          ---- If you need to change the installation directory of the parsers (see -> Advanced Setup)
-          -- parser_install_dir = "/some/path/to/store/parsers", -- Remember to run vim.opt.runtimepath:append("/some/path/to/store/parsers")!
-
           highlight = {
             enable = true,
-
-            -- NOTE: these are the names of the parsers and not the filetype. (for example if you want to
-            -- disable highlighting for the `tex` filetype, you need to include `latex` in this list as this is
-            -- the name of the parser)
-            -- list of language that will be disabled
-            -- disable = { "c", "rust" },
-            -- Or use a function for more flexibility, e.g. to disable slow treesitter highlight for large files
             disable = function(lang, buf)
-              local max_filesize = 100 * 1024 -- 100 KB
+              local max_filesize = 100 * 1024 -- Disable for large files (>100KB)
               local ok, stats = pcall(vim.loop.fs_stat, vim.api.nvim_buf_get_name(buf))
               if ok and stats and stats.size > max_filesize then
                 return true
               end
             end,
-
-            -- Setting this to true will run `:h syntax` and tree-sitter at the same time.
-            -- Set this to `true` if you depend on 'syntax' being enabled (like for indentation).
-            -- Using this option may slow down your editor, and you may see some duplicate highlights.
-            -- Instead of true it can also be a list of languages
             additional_vim_regex_highlighting = false,
           },
           indent = { enable = true },
@@ -102,8 +180,8 @@ require("lazy").setup({
       end
     }
   },
-  -- Configure any other settings here. See the documentation for more details.
 
-  -- automatically check for plugin updates
+  -- Enable automatic plugin update check
   checker = { enabled = true },
 })
+
