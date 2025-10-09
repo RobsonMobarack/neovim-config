@@ -27,7 +27,8 @@ vim.opt.timeoutlen = 300        -- Shorter mapped sequence timeout
 
 -- Persistent undo settings
 vim.opt.undofile = true                               -- Enable persistent undo
-vim.opt.undodir = vim.fn.expand('~/.vim/undodir')     -- Set undo directory
+-- vim.opt.undodir = vim.fn.expand('~/.vim/undodir')     -- Set undo directory (Linux)
+vim.opt.undodir = vim.fn.stdpath('data') .. '/undodir'     -- Set undo directory (Windows)
 
 -- =========================
 -- Bootstrap lazy.nvim
