@@ -1,10 +1,11 @@
 -- =========================
 -- Neovim Configuration File
 -- Author: Robson Mobarack
+-- GitHub: github.com/RobsonMobarack/neovim-config
 -- =========================
 
 -- Colorscheme (you can change to any modern theme you prefer)
-vim.cmd.colorscheme("elflord")
+-- vim.cmd.colorscheme("elflord")
 
 -- Indentation settings
 vim.opt.expandtab = true        -- Use spaces instead of tabs
@@ -69,6 +70,75 @@ end
 -- =========================
 require("lazy").setup({
   spec = {
+    -- Colorscheme
+    {
+      "catppuccin/nvim",
+      name = "catppuccin",
+      priority = 1000,
+      config = function()
+        require("catppuccin").setup({ flavour = "macchiato" })
+        vim.cmd.colorscheme "catppuccin"
+      end
+    },
+
+    -- nvim-cmp
+    {
+      'hrsh7th/nvim-cmp',
+      dependencies = {
+        'hrsh7th/cmp-nvim-lsp', -- Fonte para sugestões do LSP
+        'hrsh7th/cmp-buffer',   -- Fonte para palavras do buffer atual
+        'hrsh7th/cmp-path',     -- Fonte para caminhos de arquivo
+        'L3MON4D3/LuaSnip',     -- Motor de snippets (altamente recomendado)
+        'saadparwaiz1/cmp_luasnip', -- Integração entre nvim-cmp e LuaSnip
+      },
+      config = function()
+        local cmp = require('cmp')
+        local luasnip = require('luasnip')
+
+        cmp.setup({
+          snippet = {
+            expand = function(args)
+              luasnip.lsp_expand(args.body)
+            end,
+          },
+          -- Mapeamentos de teclas para o menu de autocompletar
+          mapping = cmp.mapping.preset.insert({
+            -- ['<C-b>'] = cmp.mapping.scroll_docs(-4),
+            ['<C-f>'] = cmp.mapping.scroll_docs(4),
+            -- ['<C-Space>'] = cmp.mapping.complete(), -- Abre o menu de sugestões
+            ['<C-e>'] = cmp.mapping.abort(),      -- Fecha o menu
+            ['<CR>'] = cmp.mapping.confirm({ select = true }), -- Confirma a sugestão com Enter
+            -- A mágica do Tab para navegar e confirmar!
+            ['<Tab>'] = cmp.mapping(function(fallback)
+              if cmp.visible() then
+                cmp.select_next_item()
+              elseif luasnip.expand_or_jumpable() then
+                luasnip.expand_or_jump()
+              else
+                fallback()
+              end
+            end, { 'i', 's' }),
+            ['<S-Tab>'] = cmp.mapping(function(fallback)
+              if cmp.visible() then
+                cmp.select_prev_item()
+              elseif luasnip.jumpable(-1) then
+                luasnip.jump(-1)
+              else
+                fallback()
+              end
+            end, { 'i', 's' }),
+          }),
+          -- Fontes de onde o nvim-cmp buscará as sugestões
+          sources = cmp.config.sources({
+            { name = 'nvim_lsp' },
+            { name = 'luasnip' },
+            { name = 'buffer' },
+            { name = 'path' },
+          })
+        })
+      end
+    },
+
     -- LSP Configuration
     {
       "neovim/nvim-lspconfig",
@@ -147,7 +217,7 @@ require("lazy").setup({
           ensure_installed = servers,
           -- automatic_enable will call `vim.lsp.enable()` for installed servers
           -- (this is the new behavior in mason-lspconfig v2+)
-          automatic_enable = true,
+          automatic_enable = false,
         })
 
         -- Configure mason-tool-installer for non-LSP tools (formatters, linters, test tools)
@@ -157,6 +227,20 @@ require("lazy").setup({
             ensure_installed = { "gotestsum", "eslint_d", "prettier", "cspell" },
           })
         end
+
+        -- Atalho F5 para compilar com gcc e executar
+        vim.keymap.set('n', '<F5>', function()
+          vim.cmd('w') -- Salva o arquivo
+          -- Compila o arquivo (ex: main.c) para um executável com o mesmo nome (main)
+          -- e o executa se a compilação der certo (&&)
+          -- local cmd = string.format('!gcc %s -o %s && ./%s', vim.fn.expand('%'), vim.fn.expand('%:r'), vim.fn.expand('%:r')) -- Linux
+          local cmd = string.format('!gcc %s -o %s && %s.exe', vim.fn.expand('%'), vim.fn.expand('%:r'), vim.fn.expand('%:r')) -- Windows
+          vim.cmd(cmd)
+        end, {
+            noremap = true,
+            silent = false, -- mostramos o comando
+            desc = "Compila e executa o arquivo C com GCC"
+          })
 
         -- Configure LSP servers via lspconfig directly.
         -- Since mason-lspconfig v2 removed setup_handlers, we configure servers ourselves.
