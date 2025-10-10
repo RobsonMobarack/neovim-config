@@ -29,7 +29,7 @@ vim.opt.timeoutlen = 300        -- Shorter mapped sequence timeout
 -- Persistent undo settings
 vim.opt.undofile = true                               -- Enable persistent undo
 -- vim.opt.undodir = vim.fn.expand('~/.vim/undodir')     -- Set undo directory (Linux)
-vim.opt.undodir = vim.fn.stdpath('data') .. '/undodir'     -- Set undo directory (Windows)
+nvim.opt.undodir = vim.fn.stdpath('data') .. '/undodir'     -- Set undo directory (Windows)
 
 -- =========================
 -- Bootstrap lazy.nvim
@@ -201,7 +201,7 @@ require("lazy").setup({
           "cssmodules_ls", -- CSS Modules (optional)
           "emmet_ls",      -- Emmet (useful for HTML/CSS)
           "bashls",        -- Bash
-          "clangd",        -- C/C++
+          -- "clangd",        -- C/C++
           "cmake",         -- CMake (cmake-language-server)
           "dockerls",      -- Dockerfile
           "docker_compose_language_service", -- docker-compose
