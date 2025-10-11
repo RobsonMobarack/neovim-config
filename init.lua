@@ -1,99 +1,99 @@
--- =========================
+-- ============================================================
 -- Neovim Configuration File
 -- Author: Robson Mobarack
 -- GitHub: github.com/RobsonMobarack/neovim-config
--- =========================
+-- ============================================================
 
--- Colorscheme (you can change to any modern theme you prefer)
--- vim.cmd.colorscheme("elflord")
+---------------------------------------------------------------
+-- =============== Basic Editor Settings =====================
+---------------------------------------------------------------
 
--- Indentation settings
+-- Tabs & indentation behavior
 vim.opt.expandtab = true        -- Use spaces instead of tabs
-vim.opt.tabstop = 2             -- Number of spaces a tab counts for
-vim.opt.softtabstop = 2         -- Number of spaces inserted when pressing <Tab>
-vim.opt.smarttab = true         -- Smart handling of tabs
+vim.opt.tabstop = 2             -- How many spaces a tab counts for
+vim.opt.softtabstop = 2         -- Spaces inserted when pressing <Tab>
 vim.opt.shiftwidth = 2          -- Indentation width
-vim.opt.autoindent = true       -- Maintain indentation from previous line
-vim.opt.smartindent = true      -- Smart automatic indentation
+vim.opt.smarttab = true         -- Context-aware tab behavior
+vim.opt.autoindent = true       -- Maintain indent from previous line
+vim.opt.smartindent = true      -- Smarter automatic indentation
 
--- UI settings
-vim.opt.number = true           -- Show absolute line numbers
-vim.opt.relativenumber = true   -- Show relative line numbers
-vim.opt.mouse = 'a'             -- Enable mouse support
-vim.opt.completeopt = "menuone,noselect" -- Better completion menu behavior
-vim.opt.termguicolors = true    -- Enable 24-bit RGB colors
-vim.opt.signcolumn = "yes"     -- Always show sign column to avoid flicker
-vim.opt.updatetime = 250        -- Faster diagnostics update
-vim.opt.timeoutlen = 300        -- Shorter mapped sequence timeout
+-- User interface
+vim.opt.number = true           -- Show line numbers
+vim.opt.relativenumber = true   -- Relative line numbers for easier movement
+vim.opt.mouse = "a"             -- Enable mouse support
+vim.opt.termguicolors = true    -- Enable 24-bit color
+vim.opt.signcolumn = "yes"      -- Keep the sign column always visible
+vim.opt.completeopt = "menuone,noselect" -- Completion behavior
+vim.opt.updatetime = 250        -- Faster updates (affects diagnostics)
+vim.opt.timeoutlen = 300        -- Shorter keymap timeout for better UX
 
--- Persistent undo settings
-vim.opt.undofile = true                               -- Enable persistent undo
--- vim.opt.undodir = vim.fn.expand('~/.vim/undodir')     -- Set undo directory (Linux)
-nvim.opt.undodir = vim.fn.stdpath('data') .. '/undodir'     -- Set undo directory (Windows)
+-- Persistent undo
+vim.opt.undofile = true
+vim.opt.undodir = vim.fn.stdpath("data") .. "/undodir"  -- set undodir directory (Windows)
+-- vim.opt.undodir = vim.fn.expand('~/.vim/undodir')    -- set undodir directory (Linux)
 
--- =========================
--- Bootstrap lazy.nvim
--- =========================
-local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not (vim.uv or vim.loop).fs_stat(lazypath) then
-  local lazyrepo = "https://github.com/folke/lazy.nvim.git"
-  local out = vim.fn.system({ "git", "clone", "--filter=blob:none", "--branch=stable", lazyrepo, lazypath })
-  if vim.v.shell_error ~= 0 then
-    vim.api.nvim_echo({
-      { "Failed to clone lazy.nvim: ", "ErrorMsg" },
-      { out, "WarningMsg" },
-      { "Press any key to exit..." },
-    }, true, {})
-    vim.fn.getchar()
-    os.exit(1)
-  end
-end
-vim.opt.rtp:prepend(lazypath)
-
--- Leader keys (set before plugins so mappings using leader are correct)
+-- Leader keys (for custom shortcuts)
 vim.g.mapleader = " "
 vim.g.maplocalleader = "\\"
 
--- =========================
--- Helper: safe require
--- =========================
+---------------------------------------------------------------
+-- =============== Lazy.nvim Bootstrap ========================
+---------------------------------------------------------------
+
+local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+if not (vim.uv or vim.loop).fs_stat(lazypath) then
+  local repo = "https://github.com/folke/lazy.nvim.git"
+  vim.fn.system({ "git", "clone", "--filter=blob:none", "--branch=stable", repo, lazypath })
+end
+vim.opt.rtp:prepend(lazypath)
+
+---------------------------------------------------------------
+-- =============== Helper: Safe Require =======================
+---------------------------------------------------------------
+
+--- Tries to require a Lua module safely.
+--- Returns nil if it fails instead of throwing an error.
 local function safe_require(name)
-  local ok, m = pcall(require, name)
-  if not ok then
-    return nil
-  end
-  return m
+  local ok, mod = pcall(require, name)
+  if not ok then return nil end
+  return mod
 end
 
--- =========================
--- Plugin Setup with lazy.nvim
--- =========================
+---------------------------------------------------------------
+-- =============== Lazy Plugin Setup ==========================
+---------------------------------------------------------------
+
 require("lazy").setup({
   spec = {
-    -- Colorscheme
+
+    -----------------------------------------------------------
+    -- Colorscheme: Catppuccin
+    -----------------------------------------------------------
     {
       "catppuccin/nvim",
       name = "catppuccin",
       priority = 1000,
       config = function()
         require("catppuccin").setup({ flavour = "macchiato" })
-        vim.cmd.colorscheme "catppuccin"
-      end
+        vim.cmd.colorscheme("catppuccin")
+      end,
     },
 
-    -- nvim-cmp
+    -----------------------------------------------------------
+    -- Autocompletion: nvim-cmp + LuaSnip
+    -----------------------------------------------------------
     {
-      'hrsh7th/nvim-cmp',
+      "hrsh7th/nvim-cmp",
       dependencies = {
-        'hrsh7th/cmp-nvim-lsp', -- Fonte para sugestões do LSP
-        'hrsh7th/cmp-buffer',   -- Fonte para palavras do buffer atual
-        'hrsh7th/cmp-path',     -- Fonte para caminhos de arquivo
-        'L3MON4D3/LuaSnip',     -- Motor de snippets (altamente recomendado)
-        'saadparwaiz1/cmp_luasnip', -- Integração entre nvim-cmp e LuaSnip
+        "hrsh7th/cmp-nvim-lsp",      -- LSP completion source
+        "hrsh7th/cmp-buffer",        -- Buffer words source
+        "hrsh7th/cmp-path",          -- Filesystem paths
+        "L3MON4D3/LuaSnip",          -- Snippet engine
+        "saadparwaiz1/cmp_luasnip",  -- LuaSnip integration
       },
       config = function()
-        local cmp = require('cmp')
-        local luasnip = require('luasnip')
+        local cmp = require("cmp")
+        local luasnip = require("luasnip")
 
         cmp.setup({
           snippet = {
@@ -101,15 +101,11 @@ require("lazy").setup({
               luasnip.lsp_expand(args.body)
             end,
           },
-          -- Mapeamentos de teclas para o menu de autocompletar
           mapping = cmp.mapping.preset.insert({
-            -- ['<C-b>'] = cmp.mapping.scroll_docs(-4),
-            ['<C-f>'] = cmp.mapping.scroll_docs(4),
-            -- ['<C-Space>'] = cmp.mapping.complete(), -- Abre o menu de sugestões
-            ['<C-e>'] = cmp.mapping.abort(),      -- Fecha o menu
-            ['<CR>'] = cmp.mapping.confirm({ select = true }), -- Confirma a sugestão com Enter
-            -- A mágica do Tab para navegar e confirmar!
-            ['<Tab>'] = cmp.mapping(function(fallback)
+            ["<C-f>"] = cmp.mapping.scroll_docs(4),
+            ["<C-e>"] = cmp.mapping.abort(),
+            ["<CR>"] = cmp.mapping.confirm({ select = true }),
+            ["<Tab>"] = cmp.mapping(function(fallback)
               if cmp.visible() then
                 cmp.select_next_item()
               elseif luasnip.expand_or_jumpable() then
@@ -117,8 +113,8 @@ require("lazy").setup({
               else
                 fallback()
               end
-            end, { 'i', 's' }),
-            ['<S-Tab>'] = cmp.mapping(function(fallback)
+            end, { "i", "s" }),
+            ["<S-Tab>"] = cmp.mapping(function(fallback)
               if cmp.visible() then
                 cmp.select_prev_item()
               elseif luasnip.jumpable(-1) then
@@ -126,20 +122,21 @@ require("lazy").setup({
               else
                 fallback()
               end
-            end, { 'i', 's' }),
+            end, { "i", "s" }),
           }),
-          -- Fontes de onde o nvim-cmp buscará as sugestões
           sources = cmp.config.sources({
-            { name = 'nvim_lsp' },
-            { name = 'luasnip' },
-            { name = 'buffer' },
-            { name = 'path' },
-          })
+            { name = "nvim_lsp" },
+            { name = "luasnip" },
+            { name = "buffer" },
+            { name = "path" },
+          }),
         })
-      end
+      end,
     },
 
-    -- LSP Configuration
+    -----------------------------------------------------------
+    -- LSP Setup: Mason + New Neovim 0.11 API
+    -----------------------------------------------------------
     {
       "neovim/nvim-lspconfig",
       dependencies = {
@@ -148,79 +145,56 @@ require("lazy").setup({
         "WhoIsSethDaniel/mason-tool-installer.nvim",
       },
       config = function()
-        -- on_attach runs when a server attaches to a buffer.
-        local on_attach = function(client, bufnr)
-          vim.api.nvim_buf_set_option(bufnr, "omnifunc", "v:lua.vim.lsp.omnifunc")
+        -- Called whenever an LSP client attaches to a buffer
+        local function on_attach(client, bufnr)
           local opts = { noremap = true, silent = true, buffer = bufnr }
-
-          -- Keymaps for LSP features
-          vim.keymap.set("n", "gD", vim.lsp.buf.declaration, opts)
           vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
           vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
-          vim.keymap.set("n", "gi", vim.lsp.buf.implementation, opts)
-          vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, opts)
-          vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, opts)
-          vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, opts)
-          vim.keymap.set("n", "<leader>wl", function()
-            print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-          end, opts)
-          vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, opts)
           vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
           vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, opts)
           vim.keymap.set("n", "gr", vim.lsp.buf.references, opts)
           vim.keymap.set("n", "<leader>f", function()
-            vim.lsp.buf.format { async = true }
+            vim.lsp.buf.format({ async = true })
           end, opts)
         end
 
-        -- Ensure Mason is available
+        -- Mason setup (package manager for LSP servers and tools)
         local mason = safe_require("mason")
-        if not mason then
-          vim.notify("mason.nvim not found", vim.log.levels.ERROR)
-          return
-        end
-        mason.setup()
+        if mason then mason.setup() end
 
         local mason_lspconfig = safe_require("mason-lspconfig")
         if not mason_lspconfig then
-          vim.notify("mason-lspconfig.nvim not found", vim.log.levels.ERROR)
+          vim.notify("mason-lspconfig not found", vim.log.levels.ERROR)
           return
         end
 
-        -- List of LSPs we want to ensure are available. These are the *lspconfig* server names
-        -- (not necessarily the npm/package names in Mason registry). The setup below will
-        -- attempt to configure each available server safely.
+        -- List of language servers to ensure are installed and enabled
         local servers = {
-          -- Core / common servers
-          "lua_ls",        -- Lua (sumneko replacement)
-          "ts_ls",         -- TypeScript/JavaScript (lspconfig uses ts_ls currently)
-          "pyright",       -- Python
-          "gopls",         -- Go
-          "html",          -- HTML
-          "cssls",         -- CSS
-          "cssmodules_ls", -- CSS Modules (optional)
-          "emmet_ls",      -- Emmet (useful for HTML/CSS)
-          "bashls",        -- Bash
-          -- "clangd",        -- C/C++
-          "cmake",         -- CMake (cmake-language-server)
-          "dockerls",      -- Dockerfile
-          "docker_compose_language_service", -- docker-compose
-          "jsonls",        -- JSON
-          "yamlls",        -- YAML
-          "eslint",        -- ESLint
-          "angularls",     -- Angular
-          "cspell_ls"
+          "lua_ls",
+          "ts_ls", -- TypeScript/JavaScript
+          "pyright",
+          "gopls",
+          "html",
+          "cssls",
+          "cssmodules_ls",
+          "emmet_ls",
+          "bashls",
+          "clangd",
+          "cmake",
+          "dockerls",
+          "docker_compose_language_service",
+          "jsonls",
+          "yamlls",
+          "eslint",
+          "angularls",
+          "cspell_ls",
         }
 
-        -- Ask mason-lspconfig to ensure the servers are installed and enable automatic activation
         mason_lspconfig.setup({
           ensure_installed = servers,
-          -- automatic_enable will call `vim.lsp.enable()` for installed servers
-          -- (this is the new behavior in mason-lspconfig v2+)
-          automatic_enable = false,
         })
 
-        -- Configure mason-tool-installer for non-LSP tools (formatters, linters, test tools)
+        -- Optional: install formatters/linters using Mason Tool Installer
         local mti = safe_require("mason-tool-installer")
         if mti then
           mti.setup({
@@ -228,122 +202,78 @@ require("lazy").setup({
           })
         end
 
-        -- Atalho F5 para compilar com gcc e executar
-        vim.keymap.set('n', '<F5>', function()
-          vim.cmd('w') -- Salva o arquivo
-          -- Compila o arquivo (ex: main.c) para um executável com o mesmo nome (main)
-          -- e o executa se a compilação der certo (&&)
-          -- local cmd = string.format('!gcc %s -o %s && ./%s', vim.fn.expand('%'), vim.fn.expand('%:r'), vim.fn.expand('%:r')) -- Linux
-          local cmd = string.format('!gcc %s -o %s && %s.exe', vim.fn.expand('%'), vim.fn.expand('%:r'), vim.fn.expand('%:r')) -- Windows
-          vim.cmd(cmd)
-        end, {
-            noremap = true,
-            silent = false, -- mostramos o comando
-            desc = "Compila e executa o arquivo C com GCC"
-          })
-
-        -- Configure LSP servers via lspconfig directly.
-        -- Since mason-lspconfig v2 removed setup_handlers, we configure servers ourselves.
-        local lspconfig = safe_require("lspconfig")
-        if not lspconfig then
-          vim.notify("nvim-lspconfig not found", vim.log.levels.ERROR)
-          return
-        end
-
-        -- Default capabilities (for completion plugins like nvim-cmp)
+        -- Default capabilities (for nvim-cmp)
         local capabilities = vim.lsp.protocol.make_client_capabilities()
-        local has_cmp_nvim_lsp, cmp_nvim_lsp = pcall(require, "cmp_nvim_lsp")
-        if has_cmp_nvim_lsp then
+        local ok_cmp, cmp_nvim_lsp = pcall(require, "cmp_nvim_lsp")
+        if ok_cmp then
           capabilities = cmp_nvim_lsp.default_capabilities(capabilities)
         end
 
-        -- Helper to safely setup a server if it's provided by lspconfig
-        local function try_setup(server_name, opts)
-          local ok, server = pcall(function() return lspconfig[server_name] end)
-          if not ok or server == nil then
-            -- not supported by lspconfig in this Neovim version
-            return false
-          end
-          local final_opts = vim.tbl_deep_extend("force", {
-            on_attach = on_attach,
-            capabilities = capabilities,
-          }, opts or {})
-          -- Protect the setup call
-          local s_ok, s_err = pcall(server.setup, final_opts)
-          if not s_ok then
-            vim.notify(string.format("Failed to setup LSP '%s': %s", server_name, s_err), vim.log.levels.WARN)
-            return false
-          end
-          return true
-        end
-
-        -- Example: special settings for some servers
-        try_setup("lua_ls", {
-          settings = {
-            Lua = {
-              runtime = { version = "LuaJIT" },
-              diagnostics = { globals = { "vim" } },
-              workspace = { library = vim.api.nvim_get_runtime_file("", true) },
-              telemetry = { enable = false },
-            },
-          },
+        -------------------------------------------------------
+        -- Register default config for all servers
+        -------------------------------------------------------
+        vim.lsp.config("*", {
+          on_attach = on_attach,
+          capabilities = capabilities,
+          root_markers = { ".git", "package.json", "pyproject.toml", "go.mod" },
         })
 
-        -- Typescript: prefer ts_ls if available in this lspconfig version
-        if not try_setup("ts_ls") then
-          -- Older lspconfig versions might still use 'tsserver'
-          try_setup("tsserver")
+        -------------------------------------------------------
+        -- Enable all configured servers
+        -------------------------------------------------------
+        for _, server in ipairs(servers) do
+          vim.lsp.enable(server)
         end
 
-        -- clangd with a small example customization
-        try_setup("clangd", { cmd = { "clangd" } })
-
-        -- Fallback: attempt to setup the rest of the servers from the list
-        for _, srv in ipairs(servers) do
-          -- skip ones we've explicitly configured already
-          if srv ~= "lua_ls" and srv ~= "ts_ls" and srv ~= "tsserver" and srv ~= "clangd" then
-            try_setup(srv)
-          end
-        end
-
-        -- Diagnostics UI: disable virtual_text by default for cleaner view
-        vim.diagnostic.config({ virtual_text = false, signs = true, underline = true, update_in_insert = false })
+        -------------------------------------------------------
+        -- Diagnostics visualization preferences
+        -------------------------------------------------------
+        vim.diagnostic.config({
+          virtual_text = false,     -- Disable inline text
+          signs = true,             -- Show signs on the left
+          underline = true,         -- Underline problematic text
+          update_in_insert = false, -- Avoid updates while typing
+        })
       end,
     },
 
-    -- Telescope Configuration (fuzzy finder)
+    -----------------------------------------------------------
+    -- Telescope: fuzzy finder for files and symbols
+    -----------------------------------------------------------
     {
-      'nvim-telescope/telescope.nvim',
-      tag = '0.1.8',
-      dependencies = { 'nvim-lua/plenary.nvim' },
+      "nvim-telescope/telescope.nvim",
+      tag = "0.1.8",
+      dependencies = { "nvim-lua/plenary.nvim" },
       config = function()
-        local builtin = require('telescope.builtin')
-        require('telescope').setup({
-          defaults = { file_ignore_patterns = { "node_modules", "%.git/" } }
+        local builtin = require("telescope.builtin")
+        require("telescope").setup({
+          defaults = { file_ignore_patterns = { "node_modules", "%.git/" } },
         })
-        vim.keymap.set('n', '<leader>ff', builtin.find_files, { desc = 'Telescope find files' })
-        vim.keymap.set('n', '<leader>fg', builtin.live_grep, { desc = 'Telescope live grep' })
-        vim.keymap.set('n', '<leader>fb', builtin.buffers, { desc = 'Telescope buffers' })
-        vim.keymap.set('n', '<leader>fh', builtin.help_tags, { desc = 'Telescope help tags' })
-      end
+        vim.keymap.set("n", "<leader>ff", builtin.find_files, { desc = "Telescope: Find files" })
+        vim.keymap.set("n", "<leader>fg", builtin.live_grep, { desc = "Telescope: Live grep" })
+        vim.keymap.set("n", "<leader>fb", builtin.buffers, { desc = "Telescope: List buffers" })
+        vim.keymap.set("n", "<leader>fh", builtin.help_tags, { desc = "Telescope: Help tags" })
+      end,
     },
 
-    -- Treesitter Configuration (syntax highlighting and parsing)
+    -----------------------------------------------------------
+    -- Treesitter: syntax highlighting and parsing
+    -----------------------------------------------------------
     {
       "nvim-treesitter/nvim-treesitter",
       build = ":TSUpdate",
       config = function()
-        require('nvim-treesitter.configs').setup({
+        require("nvim-treesitter.configs").setup({
           ensure_installed = {
             "lua", "vim", "vimdoc", "bash", "html", "typescript", "javascript",
-            "css", "json", "yaml", "go", "python", "cpp", "c", "sql", "markdown"
+            "css", "json", "yaml", "go", "python", "cpp", "c", "sql", "markdown",
           },
           sync_install = false,
           auto_install = true,
           highlight = {
             enable = true,
             disable = function(lang, buf)
-              local max_filesize = 100 * 1024 -- Disable for large files (>100KB)
+              local max_filesize = 100 * 1024 -- Skip highlight on files >100KB
               local ok, stats = pcall(vim.loop.fs_stat, vim.api.nvim_buf_get_name(buf))
               if ok and stats and stats.size > max_filesize then
                 return true
@@ -353,13 +283,30 @@ require("lazy").setup({
           },
           indent = { enable = true },
         })
-      end
-    }
+      end,
+    },
   },
-
-  -- Enable automatic plugin update check
   checker = { enabled = true },
 })
 
--- EOF
+---------------------------------------------------------------
+-- =============== Optional: Compile & Run C ==================
+---------------------------------------------------------------
 
+-- Windows version: compiles and runs C files when pressing <F5>
+vim.keymap.set("n", "<F5>", function()
+  vim.cmd("w")
+  local cmd = string.format("!gcc %s -o %s && %s.exe",
+    vim.fn.expand("%"), vim.fn.expand("%:r"), vim.fn.expand("%:r"))
+  vim.cmd(cmd)
+end, { noremap = true, silent = false, desc = "Compile & run C (Windows)" })
+
+-- Linux version: compiles and runs C files when pressing <F5>
+-- vim.keymap.set("n", "<F5>", function()
+--   vim.cmd("w")
+--   local cmd = string.format("!gcc %s -o %s && ./%s",
+--     vim.fn.expand("%"), vim.fn.expand("%:r"), vim.fn.expand("%:r"))
+--   vim.cmd(cmd)
+-- end, { noremap = true, silent = false, desc = "Compile & run C (Linux)" })
+
+-- ========================== End of File ==========================
