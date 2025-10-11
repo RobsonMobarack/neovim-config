@@ -29,12 +29,22 @@ vim.opt.timeoutlen = 300        -- Shorter keymap timeout for better UX
 
 -- Persistent undo
 vim.opt.undofile = true
-vim.opt.undodir = vim.fn.stdpath("data") .. "/undodir"  -- set undodir directory (Windows)
--- vim.opt.undodir = vim.fn.expand('~/.vim/undodir')    -- set undodir directory (Linux)
+-- vim.opt.undodir = vim.fn.stdpath("data") .. "/undodir"  -- set undodir directory (Windows)
+vim.opt.undodir = vim.fn.expand('~/.vim/undodir')    -- set undodir directory (Linux)
 
 -- Leader keys (for custom shortcuts)
 vim.g.mapleader = " "
 vim.g.maplocalleader = "\\"
+
+---------------------------------------------------------------
+-- ============== Key Map Configuration =======================
+---------------------------------------------------------------
+
+-- space + s saves the file
+vim.keymap.set("n", "<leader>s", ":write<CR>", { silent = true })
+
+-- space + h to clear search highlight
+vim.keymap.set("n", "<leader>h", ":noh<CR>", { silent = true })
 
 ---------------------------------------------------------------
 -- =============== Lazy.nvim Bootstrap ========================
@@ -132,6 +142,44 @@ require("lazy").setup({
           }),
         })
       end,
+    },
+
+    -----------------------------------------------------------
+    -- Neogit setup: 
+    -----------------------------------------------------------
+    {
+      "NeogitOrg/neogit",
+      dependencies = {
+        "nvim-lua/plenary.nvim",         -- required
+        "sindrets/diffview.nvim",        -- optional - Diff integration
+
+        -- Only one of these is needed.
+        "nvim-telescope/telescope.nvim", -- optional
+      },
+    },
+
+    -----------------------------------------------------------
+    -- Comment-nvim setup: 
+    -----------------------------------------------------------
+    {
+     'numToStr/Comment.nvim',
+      opts = {
+        padding = true,
+      },
+      -- extra = {
+      --   ---Add comment on the line above
+      --   above = 'gcO',
+      --   ---Add comment on the line below
+      --   below = 'gco',
+      --   ---Add comment at the end of line
+      --   eol = 'gcA',
+      -- },
+      mappings = {
+        ---Operator-pending mapping; `gcc` `gbc` `gc[count]{motion}` `gb[count]{motion}`
+        basic = true,
+        ---Extra mapping; `gco`, `gcO`, `gcA`
+        extra = true,
+      },
     },
 
     -----------------------------------------------------------
@@ -294,19 +342,19 @@ require("lazy").setup({
 ---------------------------------------------------------------
 
 -- Windows version: compiles and runs C files when pressing <F5>
-vim.keymap.set("n", "<F5>", function()
-  vim.cmd("w")
-  local cmd = string.format("!gcc %s -o %s && %s.exe",
-    vim.fn.expand("%"), vim.fn.expand("%:r"), vim.fn.expand("%:r"))
-  vim.cmd(cmd)
-end, { noremap = true, silent = false, desc = "Compile & run C (Windows)" })
-
--- Linux version: compiles and runs C files when pressing <F5>
 -- vim.keymap.set("n", "<F5>", function()
 --   vim.cmd("w")
---   local cmd = string.format("!gcc %s -o %s && ./%s",
+--   local cmd = string.format("!gcc %s -o %s && %s.exe",
 --     vim.fn.expand("%"), vim.fn.expand("%:r"), vim.fn.expand("%:r"))
 --   vim.cmd(cmd)
--- end, { noremap = true, silent = false, desc = "Compile & run C (Linux)" })
+-- end, { noremap = true, silent = false, desc = "Compile & run C (Windows)" })
+
+-- Linux version: compiles and runs C files when pressing <F5>
+vim.keymap.set("n", "<F5>", function()
+  vim.cmd("w")
+  local cmd = string.format("!gcc %s -o %s && ./%s",
+    vim.fn.expand("%"), vim.fn.expand("%:r"), vim.fn.expand("%:r"))
+  vim.cmd(cmd)
+end, { noremap = true, silent = false, desc = "Compile & run C (Linux)" })
 
 -- ========================== End of File ==========================
