@@ -29,8 +29,8 @@ vim.opt.timeoutlen = 300        -- Shorter keymap timeout for better UX
 
 -- Persistent undo
 vim.opt.undofile = true
--- vim.opt.undodir = vim.fn.stdpath("data") .. "/undodir"  -- set undodir directory (Windows)
-vim.opt.undodir = vim.fn.expand('~/.vim/undodir')    -- set undodir directory (Linux)
+vim.opt.undodir = vim.fn.stdpath("data") .. "/undodir"  -- set undodir directory (Windows)
+-- vim.opt.undodir = vim.fn.expand('~/.vim/undodir')    -- set undodir directory (Linux)
 
 -- Leader keys (for custom shortcuts)
 vim.g.mapleader = " "
@@ -166,14 +166,6 @@ require("lazy").setup({
       opts = {
         padding = true,
       },
-      -- extra = {
-      --   ---Add comment on the line above
-      --   above = 'gcO',
-      --   ---Add comment on the line below
-      --   below = 'gco',
-      --   ---Add comment at the end of line
-      --   eol = 'gcA',
-      -- },
       mappings = {
         ---Operator-pending mapping; `gcc` `gbc` `gc[count]{motion}` `gb[count]{motion}`
         basic = true,
