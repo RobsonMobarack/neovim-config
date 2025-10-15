@@ -84,6 +84,18 @@ end
 require("lazy").setup({
 	spec = {
 
+    -----------------------------------------------------------
+    -- Autopairs: To close brackets, quotes, etc. automatically
+    -----------------------------------------------------------
+
+    {
+      'windwp/nvim-autopairs',
+      event = "InsertEnter",
+      config = true
+      -- use opts = {} for passing setup options
+      -- this is equivalent to setup({}) function
+    },
+
 		-----------------------------------------------------------
 		-- Colorscheme: Catppuccin
 		-----------------------------------------------------------
