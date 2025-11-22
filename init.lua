@@ -5,6 +5,14 @@
 -- ============================================================
 
 ---------------------------------------------------------------
+-- =============== OS Detection ===============================
+---------------------------------------------------------------
+-- Detect operating system to handle paths and commands dynamically
+local IS_WINDOWS = vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1
+local IS_MAC = vim.fn.has("macunix") == 1
+local IS_LINUX = not IS_WINDOWS and not IS_MAC
+
+---------------------------------------------------------------
 -- =============== Basic Editor Settings =====================
 ---------------------------------------------------------------
 
@@ -27,10 +35,26 @@ vim.opt.completeopt = "menuone,noselect" -- Completion behavior
 vim.opt.updatetime = 250 -- Faster updates (affects diagnostics)
 vim.opt.timeoutlen = 300 -- Shorter keymap timeout for better UX
 
--- Persistent undo
+-- Persistent undo configuration based on OS
 vim.opt.undofile = true
-vim.opt.undodir = vim.fn.stdpath("data") .. "/undodir" -- set undodir directory (Windows)
--- vim.opt.undodir = vim.fn.expand('~/.vim/undodir')    -- set undodir directory (Linux)
+local undo_path = ""
+
+if IS_WINDOWS then
+	undo_path = vim.fn.stdpath("data") .. "/undodir"
+else
+	-- Linux/macOS standard: ~/.vim/undodir or XDG location
+	undo_path = vim.fn.expand("~/.vim/undodir")
+	-- If you prefer the XDG standard on Linux/Mac, uncomment below instead:
+	-- vim.opt.undodir = vim.fn.stdpath("data") .. "/undodir"
+end
+
+-- Set the option using the string path
+vim.opt.undodir = undo_path
+
+-- Create undo directory if it doesn't exist to avoid errors
+if vim.fn.isdirectory(undo_path) == 0 then
+	vim.fn.mkdir(undo_path, "p")
+end
 
 -- Leader keys (for custom shortcuts)
 vim.g.mapleader = " "
@@ -47,10 +71,12 @@ vim.keymap.set("n", "<leader>s", ":write<CR>", { silent = true })
 vim.keymap.set("n", "<leader>h", ":noh<CR>", { silent = true })
 
 -- Navigate between nvim and tmux
--- vim.keymap.set("n", "<C-k>", ":wincmd k<CR>")
--- vim.keymap.set("n", "<C-j>", ":wincmd j<CR>")
--- vim.keymap.set("n", "<C-h>", ":wincmd h<CR>")
--- vim.keymap.set("n", "<C-l>", ":wincmd l<CR>")
+if not IS_WINDOWS then
+	vim.keymap.set("n", "<C-k>", ":wincmd k<CR>")
+	vim.keymap.set("n", "<C-j>", ":wincmd j<CR>")
+	vim.keymap.set("n", "<C-h>", ":wincmd h<CR>")
+	vim.keymap.set("n", "<C-l>", ":wincmd l<CR>")
+end
 
 ---------------------------------------------------------------
 -- =============== Lazy.nvim Bootstrap ========================
@@ -85,15 +111,195 @@ require("lazy").setup({
 	spec = {
 
 		-----------------------------------------------------------
+		-- Nvim-jdtls: Java LSP (nvim-jdtls) configuration with support for
+		-- Debug (DAP) & Testing and Lombok
+		-----------------------------------------------------------
+		{
+			"mfussenegger/nvim-jdtls",
+			ft = "java",
+			dependencies = {
+				"mfussenegger/nvim-dap",
+				"williamboman/mason.nvim",
+			},
+			config = function()
+				-- 1. Function to locate JDTLS installation directory via PATH
+				local function get_jdtls_home()
+					-- Try native Neovim function first
+					local executable = vim.fn.exepath("jdtls")
+
+					-- Fallback: If exepath fails, try to force query the system (Windows specific)
+					if executable == "" and IS_WINDOWS then
+						executable = vim.fn.system("where.exe jdtls"):gsub("\n", ""):gsub("\r", "")
+						if vim.fn.filereadable(executable) == 0 then
+							executable = ""
+						end
+					end
+
+					if executable == "" then
+						return nil
+					end
+
+					-- Normalize slashes to forward slashes (/) to avoid Windows backslash hell
+					executable = executable:gsub("\\", "/")
+
+					-- Windows-specific logic
+					if IS_WINDOWS then
+						-- Scoop Installation Handling
+						-- Convert: .../scoop/shims/jdtls.exe -> .../scoop/apps/jdtls/current
+						if executable:match("/shims/") then
+							return executable:gsub("/shims/.*", "/apps/jdtls/current")
+						end
+						-- Manual/Other Windows installs: Assume standard structure (bin/.. -> root)
+						return vim.fn.fnamemodify(executable, ":h:h")
+					end
+
+					-- Linux/macOS logic
+					local resolved_path = (vim.uv or vim.loop).fs_realpath(executable)
+					if resolved_path then
+						return vim.fn.fnamemodify(resolved_path, ":h:h")
+					end
+
+					return nil
+				end
+
+				local jdtls_home = get_jdtls_home()
+
+				-- Safety check
+				if not jdtls_home or vim.fn.isdirectory(jdtls_home) == 0 then
+					vim.notify(
+						"JDTLS not found in PATH. Location detected: " .. (jdtls_home or "nil"),
+						vim.log.levels.ERROR
+					)
+					return
+				end
+
+				-- 2. Helper to retrieve extension paths DIRECTLY from filesystem
+				local function get_mason_pkg_path(pkg_name)
+					local mason_root = vim.fn.stdpath("data") .. "/mason/packages/" .. pkg_name
+					if vim.fn.isdirectory(mason_root) == 1 then
+						return mason_root
+					end
+					return nil
+				end
+
+				-- 3. Determine OS Configuration Directory Name
+				local config_dir_name = ""
+				if IS_MAC then
+					config_dir_name = "config_mac"
+				elseif IS_WINDOWS then
+					config_dir_name = "config_win"
+				else
+					config_dir_name = "config_linux"
+				end
+
+				-- 4. Locate Launcher JAR and Lombok
+				local launcher_jar = vim.fn.glob(jdtls_home .. "/plugins/org.eclipse.equinox.launcher_*.jar")
+				if launcher_jar == "" then
+					launcher_jar = vim.fn.glob(jdtls_home .. "/org.eclipse.equinox.launcher_*.jar")
+				end
+
+				if launcher_jar == "" then
+					vim.notify("JDTLS Launcher JAR not found in detected path: " .. jdtls_home, vim.log.levels.ERROR)
+					return
+				end
+
+				-- Lombok setup
+				local lombok_path = get_mason_pkg_path("lombok-nightly")
+				local lombok_arg = ""
+				if lombok_path then
+					lombok_arg = "-javaagent:" .. lombok_path .. "/lombok.jar"
+				end
+
+				-- 5. Workspace Directory Setup
+				local project_name = vim.fn.fnamemodify(vim.fn.getcwd(), ":p:h:t")
+				local workspace_dir = vim.fn.stdpath("data") .. "/site/java/workspace-root/" .. project_name
+				if IS_WINDOWS then
+					os.execute("mkdir " .. workspace_dir .. " > nul 2>&1")
+				else
+					os.execute("mkdir -p " .. workspace_dir)
+				end
+
+				-- 6. Load Debug and Test Bundles
+				local bundles = {}
+				local java_debug_path = get_mason_pkg_path("java-debug-adapter")
+				if java_debug_path then
+					local java_debug_bundle =
+						vim.fn.glob(java_debug_path .. "/extension/server/com.microsoft.java.debug.plugin-*.jar", true)
+					table.insert(bundles, java_debug_bundle)
+				end
+				local java_test_path = get_mason_pkg_path("java-test")
+				if java_test_path then
+					vim.list_extend(
+						bundles,
+						vim.split(vim.fn.glob(java_test_path .. "/extension/server/*.jar", true), "\n")
+					)
+				end
+
+				-- 7. JDTLS Configuration Table
+				local config = {
+					cmd = {
+						"java",
+						"-Declipse.application=org.eclipse.jdt.ls.core.id1",
+						"-Dosgi.bundles.defaultStartLevel=4",
+						"-Declipse.product=org.eclipse.jdt.ls.core.product",
+						"-Dlog.protocol=true",
+						"-Dlog.level=ALL",
+						"-Xmx1g",
+						"--add-modules=ALL-SYSTEM",
+						"--add-opens",
+						"java.base/java.util=ALL-UNNAMED",
+						"--add-opens",
+						"java.base/java.lang=ALL-UNNAMED",
+						lombok_arg,
+						"-jar",
+						launcher_jar,
+						"-configuration",
+						jdtls_home .. "/" .. config_dir_name,
+						"-data",
+						workspace_dir,
+					},
+
+					root_dir = require("jdtls.setup").find_root({
+						".git",
+						"mvnw",
+						"gradlew",
+						"pom.xml",
+						"build.gradle",
+					}),
+
+					init_options = { bundles = bundles },
+
+					settings = {
+						java = {
+							errors = { incompleteClasspath = { severity = "warning" } },
+						},
+					},
+
+					on_attach = function(client, bufnr)
+						if client.name == "jdtls" then
+							require("jdtls").setup_dap({ hotcodereplace = "auto" })
+							require("jdtls.dap").setup_dap_main_class_configs()
+						end
+
+						-- Java-specific Keymaps
+						local opts = { noremap = true, silent = true, buffer = bufnr }
+						vim.keymap.set("n", "<leader>jo", "<Cmd>lua require'jdtls'.organize_imports()<CR>", opts)
+						vim.keymap.set("n", "<leader>jt", "<Cmd>lua require'jdtls'.test_class()<CR>", opts)
+						vim.keymap.set("n", "<leader>jn", "<Cmd>lua require'jdtls'.test_nearest_method()<CR>", opts)
+					end,
+				}
+
+				require("jdtls").start_or_attach(config)
+			end,
+		},
+
+		-----------------------------------------------------------
 		-- Autopairs: To close brackets, quotes, etc. automatically
 		-----------------------------------------------------------
-
 		{
 			"windwp/nvim-autopairs",
 			event = "InsertEnter",
 			config = true,
-			-- use opts = {} for passing setup options
-			-- this is equivalent to setup({}) function
 		},
 
 		-----------------------------------------------------------
@@ -121,10 +327,6 @@ require("lazy").setup({
 					invert_tabline = false,
 					inverse = true, -- invert background for search, diffs, statuslines and errors
 					contrast = "", -- can be "hard", "soft" or empty string
-					palette_overrides = {},
-					overrides = {},
-					dim_inactive = false,
-					transparent_mode = false,
 				})
 				vim.cmd.colorscheme("gruvbox")
 			end,
@@ -142,7 +344,7 @@ require("lazy").setup({
 		-- 		vim.cmd.colorscheme("catppuccin")
 		-- 	end,
 		-- },
-		--
+
 		-----------------------------------------------------------
 		-- Autocompletion: nvim-cmp + LuaSnip
 		-----------------------------------------------------------
@@ -210,35 +412,28 @@ require("lazy").setup({
 				"nvim-tree/nvim-web-devicons",
 			},
 			config = function()
-				-----------------------------------------------------------
-				-- Neo-tree Setup
-				-----------------------------------------------------------
 				require("neo-tree").setup({
-					close_if_last_window = true, -- Close Neo-tree when it's the last window
-					popup_border_style = "rounded", -- Rounded borders for floating windows
-					enable_git_status = true, -- Show Git status next to files
-					enable_diagnostics = true, -- Show LSP diagnostics in the tree
+					close_if_last_window = true,
+					popup_border_style = "rounded",
+					enable_git_status = true,
+					enable_diagnostics = true,
 
 					window = {
-						position = "left", -- Default position (can be "right" or "float")
-						width = 35, -- Default width
+						position = "left",
+						width = 35,
 						mappings = {
-							["<space>"] = "none", -- Disable accidental open on <space>
+							["<space>"] = "none",
 						},
 					},
 
 					filesystem = {
-						follow_current_file = { enabled = true }, -- Auto-focus on current file
-						group_empty_dirs = true, -- Group empty folders for cleaner view
-						hijack_netrw_behavior = "open_default", -- Replace default netrw
+						follow_current_file = { enabled = true },
+						group_empty_dirs = true,
+						hijack_netrw_behavior = "open_default",
 					},
 				})
 
-				-----------------------------------------------------------
 				-- Neo-tree Keymaps
-				-----------------------------------------------------------
-
-				-- File explorer management
 				vim.keymap.set("n", "<leader>ee", "<Cmd>Neotree show toggle<CR>", { desc = "Toggle Neo-tree" })
 				vim.keymap.set(
 					"n",
@@ -248,20 +443,14 @@ require("lazy").setup({
 				)
 				vim.keymap.set("n", "<leader>ec", "<Cmd>Neotree close<CR>", { desc = "Close file explorer" })
 				vim.keymap.set("n", "<leader>er", "<Cmd>Neotree refresh<CR>", { desc = "Refresh file explorer" })
-
-				-- Navigation between Neo-tree and editor
 				vim.keymap.set("n", "<leader>eh", "<Cmd>wincmd h<CR>", { desc = "Focus Neo-tree window" })
 				vim.keymap.set("n", "<leader>el", "<Cmd>wincmd l<CR>", { desc = "Focus editor window" })
-
-				-- Open Neo-tree in the current file's directory
 				vim.keymap.set(
 					"n",
 					"<leader>ed",
 					"<Cmd>Neotree dir=%:p:h<CR>",
 					{ desc = "Open Neo-tree in current directory" }
 				)
-
-				-- Floating Neo-tree (useful for quick file browsing)
 				vim.keymap.set(
 					"n",
 					"<leader>eo",
@@ -274,7 +463,7 @@ require("lazy").setup({
 			"antosha417/nvim-lsp-file-operations",
 			dependencies = {
 				"nvim-lua/plenary.nvim",
-				"nvim-neo-tree/neo-tree.nvim", -- makes sure that this loads after Neo-tree.
+				"nvim-neo-tree/neo-tree.nvim",
 			},
 			config = function()
 				require("lsp-file-operations").setup()
@@ -288,11 +477,8 @@ require("lazy").setup({
 					filter_rules = {
 						include_current_win = false,
 						autoselect_one = true,
-						-- filter using buffer options
 						bo = {
-							-- if the file type is one of following, the window will be ignored
 							filetype = { "neo-tree", "neo-tree-popup", "notify" },
-							-- if the buffer type is one of following, the window will be ignored
 							buftype = { "terminal", "quickfix" },
 						},
 					},
@@ -302,49 +488,37 @@ require("lazy").setup({
 
 		-----------------------------------------------------------
 		-- none-ls (null-ls) setup
-		-- Provides formatting and diagnostics via external tools
 		-----------------------------------------------------------
 		{
 			"nvimtools/none-ls.nvim",
 			dependencies = {
 				"nvim-lua/plenary.nvim",
-				"nvimtools/none-ls-extras.nvim", -- optional but recommended for newer eslint_d/prettierd
+				"nvimtools/none-ls-extras.nvim",
 			},
 			config = function()
-				-- Safe require (avoids breaking startup if plugin missing)
 				local ok, null_ls = pcall(require, "null-ls")
 				if not ok then
 					vim.notify("none-ls (null-ls) not found", vim.log.levels.ERROR)
 					return
 				end
 
-				-- Optional extras (used if available)
 				local function try_require(name)
-					local ok, mod = pcall(require, name)
-					return ok and mod or nil
+					local ok_req, mod = pcall(require, name)
+					return ok_req and mod or nil
 				end
 
 				local extras_eslint = try_require("none-ls.diagnostics.eslint_d")
 				local extras_eslint_actions = try_require("none-ls.code_actions.eslint_d")
 				local extras_prettier = try_require("none-ls.formatting.prettierd")
 
-				-- Builtins (fallbacks if extras are not present)
 				local formatting = null_ls.builtins.formatting
 				local diagnostics = null_ls.builtins.diagnostics
 
-				-----------------------------------------------------------
-				-- Sources registration
-				-----------------------------------------------------------
 				local sources = {
-					-- Prettier / Prettierd
 					(extras_prettier or formatting.prettierd or formatting.prettier).with({
 						disabled_filetypes = { "markdown", "md" },
 					}),
-
-					-- Stylua (Lua formatter)
 					formatting.stylua,
-
-					-- ESLint_d diagnostics (optional)
 					(extras_eslint or diagnostics.eslint_d).with({
 						condition = function(utils)
 							return utils.root_has_file({
@@ -356,14 +530,9 @@ require("lazy").setup({
 							})
 						end,
 					}),
-
-					-- ESLint_d code actions (optional)
 					extras_eslint_actions,
 				}
 
-				-----------------------------------------------------------
-				-- Format on save (only use none-ls for formatting)
-				-----------------------------------------------------------
 				local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
 
 				null_ls.setup({
@@ -378,7 +547,6 @@ require("lazy").setup({
 								callback = function()
 									vim.lsp.buf.format({
 										filter = function(c)
-											-- ensure only none-ls handles formatting
 											return c.name == "null-ls" or c.name == "none-ls"
 										end,
 										bufnr = bufnr,
@@ -392,85 +560,58 @@ require("lazy").setup({
 		},
 
 		-----------------------------------------------------------
-		-- Trouble.nvim setup:
+		-- Trouble.nvim setup
 		-----------------------------------------------------------
 		{
 			"folke/trouble.nvim",
-			opts = {}, -- for default options, refer to the configuration section for custom setup.
+			opts = {},
 			cmd = "Trouble",
 			keys = {
-				{
-					"<leader>xx",
-					"<cmd>Trouble diagnostics toggle<cr>",
-					desc = "Diagnostics (Trouble)",
-				},
+				{ "<leader>xx", "<cmd>Trouble diagnostics toggle<cr>", desc = "Diagnostics (Trouble)" },
 				{
 					"<leader>xX",
 					"<cmd>Trouble diagnostics toggle filter.buf=0<cr>",
 					desc = "Buffer Diagnostics (Trouble)",
 				},
-				{
-					"<leader>cs",
-					"<cmd>Trouble symbols toggle focus=false<cr>",
-					desc = "Symbols (Trouble)",
-				},
+				{ "<leader>cs", "<cmd>Trouble symbols toggle focus=false<cr>", desc = "Symbols (Trouble)" },
 				{
 					"<leader>cl",
 					"<cmd>Trouble lsp toggle focus=false win.position=right<cr>",
-					desc = "LSP Definitions / references / ... (Trouble)",
+					desc = "LSP Definitions / references (Trouble)",
 				},
-				{
-					"<leader>xL",
-					"<cmd>Trouble loclist toggle<cr>",
-					desc = "Location List (Trouble)",
-				},
-				{
-					"<leader>xQ",
-					"<cmd>Trouble qflist toggle<cr>",
-					desc = "Quickfix List (Trouble)",
-				},
+				{ "<leader>xL", "<cmd>Trouble loclist toggle<cr>", desc = "Location List (Trouble)" },
+				{ "<leader>xQ", "<cmd>Trouble qflist toggle<cr>", desc = "Quickfix List (Trouble)" },
 			},
 		},
 
 		-----------------------------------------------------------
-		-- Indent-blankline.nvim setup:
+		-- Indent-blankline.nvim setup
 		-----------------------------------------------------------
 		{
 			"lukas-reineke/indent-blankline.nvim",
 			main = "ibl",
-			---@module "ibl"
-			---@type ibl.config
 			opts = {},
 		},
 
 		-----------------------------------------------------------
-		-- Neogit setup:
+		-- Neogit setup
 		-----------------------------------------------------------
 		{
 			"NeogitOrg/neogit",
 			dependencies = {
-				"nvim-lua/plenary.nvim", -- required
-				"sindrets/diffview.nvim", -- optional - Diff integration
-
-				-- Only one of these is needed.
-				"nvim-telescope/telescope.nvim", -- optional
+				"nvim-lua/plenary.nvim",
+				"sindrets/diffview.nvim",
+				"nvim-telescope/telescope.nvim",
 			},
 		},
 
 		-----------------------------------------------------------
-		-- Comment-nvim setup:
+		-- Comment-nvim setup
 		-----------------------------------------------------------
 		{
 			"numToStr/Comment.nvim",
-			opts = {
-				padding = true,
-			},
-			mappings = {
-				---Operator-pending mapping; `gcc` `gbc` `gc[count]{motion}` `gb[count]{motion}`
-				basic = true,
-				---Extra mapping; `gco`, `gcO`, `gcA`
-				extra = true,
-			},
+			opts = { padding = true },
+			mappings = { basic = true, extra = true },
 		},
 
 		-----------------------------------------------------------
@@ -484,7 +625,6 @@ require("lazy").setup({
 				"WhoIsSethDaniel/mason-tool-installer.nvim",
 			},
 			config = function()
-				-- Called whenever an LSP client attaches to a buffer
 				local function on_attach(client, bufnr)
 					local opts = { noremap = true, silent = true, buffer = bufnr }
 					vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
@@ -497,7 +637,6 @@ require("lazy").setup({
 					end, opts)
 				end
 
-				-- Mason setup (package manager for LSP servers and tools)
 				local mason = safe_require("mason")
 				if mason then
 					mason.setup()
@@ -509,10 +648,9 @@ require("lazy").setup({
 					return
 				end
 
-				-- List of language servers to ensure are installed and enabled
 				local servers = {
 					"lua_ls",
-					"ts_ls", -- TypeScript/JavaScript
+					"ts_ls",
 					"pyright",
 					"gopls",
 					"html",
@@ -533,9 +671,9 @@ require("lazy").setup({
 
 				mason_lspconfig.setup({
 					ensure_installed = servers,
+					automatic_enable = { exclude = { "jdtls" } },
 				})
 
-				-- Optional: install formatters/linters using Mason Tool Installer
 				local mti = safe_require("mason-tool-installer")
 				if mti then
 					mti.setup({
@@ -543,37 +681,27 @@ require("lazy").setup({
 					})
 				end
 
-				-- Default capabilities (for nvim-cmp)
 				local capabilities = vim.lsp.protocol.make_client_capabilities()
 				local ok_cmp, cmp_nvim_lsp = pcall(require, "cmp_nvim_lsp")
 				if ok_cmp then
 					capabilities = cmp_nvim_lsp.default_capabilities(capabilities)
 				end
 
-				-------------------------------------------------------
-				-- Register default config for all servers
-				-------------------------------------------------------
 				vim.lsp.config("*", {
 					on_attach = on_attach,
 					capabilities = capabilities,
 					root_markers = { ".git", "package.json", "pyproject.toml", "go.mod" },
 				})
 
-				-------------------------------------------------------
-				-- Enable all configured servers
-				-------------------------------------------------------
 				for _, server in ipairs(servers) do
 					vim.lsp.enable(server)
 				end
 
-				-------------------------------------------------------
-				-- Diagnostics visualization preferences
-				-------------------------------------------------------
 				vim.diagnostic.config({
-					virtual_text = false, -- Disable inline text
-					signs = true, -- Show signs on the left
-					underline = true, -- Underline problematic text
-					update_in_insert = false, -- Avoid updates while typing
+					virtual_text = false,
+					signs = true,
+					underline = true,
+					update_in_insert = false,
 				})
 			end,
 		},
@@ -628,7 +756,7 @@ require("lazy").setup({
 					highlight = {
 						enable = true,
 						disable = function(lang, buf)
-							local max_filesize = 100 * 1024 -- Skip highlight on files >100KB
+							local max_filesize = 100 * 1024
 							local ok, stats = pcall(vim.loop.fs_stat, vim.api.nvim_buf_get_name(buf))
 							if ok and stats and stats.size > max_filesize then
 								return true
@@ -645,22 +773,29 @@ require("lazy").setup({
 })
 
 ---------------------------------------------------------------
--- =============== Optional: Compile & Run C ==================
+-- =============== Compile & Run C (Cross-Platform) ===========
 ---------------------------------------------------------------
 
--- Windows version: compiles and runs C files when pressing <F5>
--- vim.keymap.set("n", "<F5>", function()
---   vim.cmd("w")
---   local cmd = string.format("!gcc %s -o %s && %s.exe",
---     vim.fn.expand("%"), vim.fn.expand("%:r"), vim.fn.expand("%:r"))
---   vim.cmd(cmd)
--- end, { noremap = true, silent = false, desc = "Compile & run C (Windows)" })
-
--- Linux version: compiles and runs C files when pressing <F5>
 vim.keymap.set("n", "<F5>", function()
+	-- Save file
 	vim.cmd("w")
-	local cmd = string.format("!gcc %s -o %s && ./%s", vim.fn.expand("%"), vim.fn.expand("%:r"), vim.fn.expand("%:r"))
-	vim.cmd(cmd)
-end, { noremap = true, silent = false, desc = "Compile & run C (Linux)" })
 
--- ========================== End of File ==========================
+	-- Get file name and output name (without extension)
+	local file = vim.fn.expand("%")
+	local output = vim.fn.expand("%:r")
+
+	-- Build the command based on the OS
+	local cmd = ""
+	if IS_WINDOWS then
+		-- Windows: using gcc and && for chaining, executing .exe
+		cmd = string.format("!gcc %s -o %s && %s.exe", file, output, output)
+	else
+		-- Linux/macOS: using gcc and &&, executing ./output
+		cmd = string.format("!gcc %s -o %s && ./%s", file, output, output)
+	end
+
+	-- Execute the command
+	vim.cmd(cmd)
+end, { noremap = true, silent = false, desc = "Compile & run C (Auto-detect OS)" })
+
+-- ========================== End of File ========================
