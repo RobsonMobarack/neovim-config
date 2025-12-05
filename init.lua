@@ -70,6 +70,13 @@ vim.keymap.set("n", "<leader>s", ":write<CR>", { silent = true })
 -- space + h to clear search highlight
 vim.keymap.set("n", "<leader>h", ":noh<CR>", { silent = true })
 
+-- Shortcut to run/debug the current Java class (requires nvim-dap configured in jdtls)
+vim.keymap.set("n", "<leader>jr", function()
+	local dap = require("dap")
+	-- Attempts to continue an existing session or start a new one (runs the main method)
+	dap.continue()
+end, { desc = "Java: Run/Debug Main Class" })
+
 -- Navigate between nvim and tmux
 if not IS_WINDOWS then
 	vim.keymap.set("n", "<C-k>", ":wincmd k<CR>")
@@ -658,8 +665,8 @@ require("lazy").setup({
 					"cssmodules_ls",
 					"emmet_ls",
 					"bashls",
-					"clangd",
 					"cmake",
+					"clangd",
 					"dockerls",
 					"docker_compose_language_service",
 					"jsonls",
@@ -788,7 +795,7 @@ vim.keymap.set("n", "<F5>", function()
 	local cmd = ""
 	if IS_WINDOWS then
 		-- Windows: using gcc and && for chaining, executing .exe
-		cmd = string.format("!gcc %s -o %s && %s.exe", file, output, output)
+		cmd = string.format('!gcc %s -o %s && "./%s"', file, output, output)
 	else
 		-- Linux/macOS: using gcc and &&, executing ./output
 		cmd = string.format("!gcc %s -o %s && ./%s", file, output, output)
