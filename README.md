@@ -59,12 +59,12 @@ This configuration is optimized to work with the following languages out of the 
 
     **Linux/Mac:**
     ```bash
-    git clone [https://github.com/RobsonMobarack/neovim-config.git](https://github.com/RobsonMobarack/neovim-config.git) ~/.config/nvim
+    git clone https://github.com/RobsonMobarack/neovim-config.git ~/.config/nvim
     ```
 
     **Windows:**
     ```powershell
-    git clone [https://github.com/RobsonMobarack/neovim-config.git](https://github.com/RobsonMobarack/neovim-config.git) $env:LOCALAPPDATA\nvim
+    git clone https://github.com/RobsonMobarack/neovim-config.git $env:LOCALAPPDATA\nvim
     ```
 
 3.  **Launch Neovim:**
@@ -76,3 +76,4 @@ This configuration is optimized to work with the following languages out of the 
     On the first launch, `lazy.nvim` will automatically install all the plugins and `Mason` will install the LSP servers. Once it's done, restart Neovim to ensure everything is loaded correctly.
 
 Enjoy your new setup!
+
