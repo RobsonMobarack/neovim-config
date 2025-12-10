@@ -13,6 +13,13 @@ local IS_MAC = vim.fn.has("macunix") == 1
 local IS_LINUX = not IS_WINDOWS and not IS_MAC
 
 ---------------------------------------------------------------
+-- ======================== ENV VARS ==========================
+---------------------------------------------------------------
+
+-- Forces ESLint 9 to use the old configuration (.eslintrc.json)
+vim.env.ESLINT_USE_FLAT_CONFIG = "false"
+
+---------------------------------------------------------------
 -- =============== Basic Editor Settings =====================
 ---------------------------------------------------------------
 
@@ -369,6 +376,10 @@ require("lazy").setup({
 				local luasnip = require("luasnip")
 
 				cmp.setup({
+					window = {
+						completion = cmp.config.window.bordered(),
+						documentation = cmp.config.window.bordered(),
+					},
 					snippet = {
 						expand = function(args)
 							luasnip.lsp_expand(args.body)
@@ -526,18 +537,18 @@ require("lazy").setup({
 						disabled_filetypes = { "markdown", "md" },
 					}),
 					formatting.stylua,
-					(extras_eslint or diagnostics.eslint_d).with({
-						condition = function(utils)
-							return utils.root_has_file({
-								".eslintrc.js",
-								".eslintrc.cjs",
-								".eslintrc.json",
-								"eslint.config.js",
-								"package.json",
-							})
-						end,
-					}),
-					extras_eslint_actions,
+					-- (extras_eslint or diagnostics.eslint_d).with({
+					-- 	condition = function(utils)
+					-- 		return utils.root_has_file({
+					-- 			".eslintrc.js",
+					-- 			".eslintrc.cjs",
+					-- 			".eslintrc.json",
+					-- 			"eslint.config.js",
+					-- 			"package.json",
+					-- 		})
+					-- 	end,
+					-- }),
+					-- extras_eslint_actions,
 				}
 
 				local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
@@ -626,6 +637,7 @@ require("lazy").setup({
 		-----------------------------------------------------------
 		{
 			"neovim/nvim-lspconfig",
+			event = { "BufReadPre", "BufNewFile" },
 			dependencies = {
 				"williamboman/mason.nvim",
 				"williamboman/mason-lspconfig.nvim",
@@ -697,10 +709,82 @@ require("lazy").setup({
 				vim.lsp.config("*", {
 					on_attach = on_attach,
 					capabilities = capabilities,
-					root_markers = { ".git", "package.json", "pyproject.toml", "go.mod" },
+					root_markers = {
+						-- Version Control
+						".git",
+						-- Node / JS / TS
+						"package.json",
+						"tsconfig.json",
+						"jsconfig.json",
+						-- Java / Spring (Fallback if you don't use jdtls)
+						"pom.xml",
+						"build.gradle",
+						"mvnw",
+						"gradlew",
+						-- Python
+						"pyproject.toml",
+						"setup.py",
+						"requirements.txt",
+						-- Go
+						"go.mod",
+						"go.work",
+						-- C / C++
+						"compile_commands.json",
+						"Makefile",
+						-- Rust
+						"Cargo.toml",
+						-- PHP
+						"composer.json",
+						-- Monorepos / Build Tools
+						"angular.json",
+						"nx.json",
+						"turbo.json",
+						"lerna.json",
+					},
 				})
 
 				for _, server in ipairs(servers) do
+					if server == "eslint" then
+						-- Specific configuration to simulate VS Code behavior in ESLint.
+						vim.lsp.config("eslint", {
+							on_attach = function(client, bufnr)
+								client.server_capabilities.documentFormattingProvider = true
+								on_attach(client, bufnr)
+							end,
+							capabilities = capabilities,
+
+							-- 1. Ensure that the root directory is the Ionic/Angular project folder (where the package.json file is located)
+							root_markers = { "angular.json", ".eslintrc.json", "package.json", ".git" },
+
+							-- 2. Basic settings
+							settings = {
+								workingDirectory = { mode = "auto" },
+								experimental = { useFlatConfig = false },
+								codeActionOnSave = {
+									enable = true,
+									mode = "all",
+								},
+							},
+
+							-- 3. O Pulo do Gato: Injeção de dependência do Workspace
+							-- Isso replica a lógica interna do plugin do VS Code
+							on_init = function(client)
+								local root_dir = client.config.root_dir or vim.fn.getcwd()
+
+								-- Workspace Dependency Injection
+								-- Without this, the TS parser gets lost in the relative paths
+								client.config.settings.workspaceFolder = {
+									uri = vim.uri_from_fname(root_dir),
+									name = vim.fn.fnamemodify(root_dir, ":t"),
+								}
+
+								-- Notify the server about the configuration change immediately
+								client.notify("workspace/didChangeConfiguration", { settings = client.config.settings })
+								return true
+							end,
+						})
+					end
+
 					vim.lsp.enable(server)
 				end
 
@@ -764,7 +848,8 @@ require("lazy").setup({
 						enable = true,
 						disable = function(lang, buf)
 							local max_filesize = 100 * 1024
-							local ok, stats = pcall(vim.loop.fs_stat, vim.api.nvim_buf_get_name(buf))
+							local uv = vim.uv or vim.loop
+							local ok, stats = pcall(uv.fs_stat, vim.api.nvim_buf_get_name(buf))
 							if ok and stats and stats.size > max_filesize then
 								return true
 							end
@@ -804,5 +889,34 @@ vim.keymap.set("n", "<F5>", function()
 	-- Execute the command
 	vim.cmd(cmd)
 end, { noremap = true, silent = false, desc = "Compile & run C (Auto-detect OS)" })
+
+---------------------------------------------------------------
+-- =============== UI Overrides (Force Borders) ===============
+---------------------------------------------------------------
+
+-- 1. Force edges on Hover (Shift+K) and Signature Help
+local _border = "rounded"
+
+vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
+	border = _border,
+})
+
+vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, {
+	border = _border,
+})
+
+-- 2. Force edges on floating diagnostic windows
+vim.diagnostic.config({
+	float = { border = _border },
+})
+
+-- 3. Hack to ensure borders in windows that use the standard open_floating_preview API
+-- This addresses cases where plugins use the LSP utility function directly.
+local orig_util_open_floating_preview = vim.lsp.util.open_floating_preview
+function vim.lsp.util.open_floating_preview(contents, syntax, opts, ...)
+	opts = opts or {}
+	opts.border = opts.border or _border
+	return orig_util_open_floating_preview(contents, syntax, opts, ...)
+end
 
 -- ========================== End of File ========================
