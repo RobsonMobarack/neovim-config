@@ -1,3 +1,8 @@
+---------------------------------------------------------------
+-- =============== Command tracker ============================
+---------------------------------------------------------------
+require("command_tracker").setup()
+
 -- ============================================================
 -- Neovim Configuration File
 -- Author: Robson Mobarack
@@ -314,6 +319,34 @@ require("lazy").setup({
 			"windwp/nvim-autopairs",
 			event = "InsertEnter",
 			config = true,
+		},
+
+		-----------------------------------------------------------
+		-- Neogen: Document generator via Treesitter
+		-----------------------------------------------------------
+		{
+			"danymat/neogen",
+			dependencies = "nvim-treesitter/nvim-treesitter",
+			config = function()
+				require("neogen").setup({
+					enabled = true,
+					languages = {
+						-- Specific configuration for Java/JS/TS (Docstrings)
+						java = { template = { annotation_convention = "javadoc" } },
+						typescript = { template = { annotation_convention = "jsdoc" } },
+						javascript = { template = { annotation_convention = "jsdoc" } },
+					},
+				})
+			end,
+			keys = {
+				{
+					"<leader>nf",
+					function()
+						require("neogen").generate()
+					end,
+					desc = "Generate Docstring (Function/Class)",
+				},
+			},
 		},
 
 		-----------------------------------------------------------
@@ -709,82 +742,53 @@ require("lazy").setup({
 				vim.lsp.config("*", {
 					on_attach = on_attach,
 					capabilities = capabilities,
-					root_markers = {
-						-- Version Control
-						".git",
-						-- Node / JS / TS
-						"package.json",
-						"tsconfig.json",
-						"jsconfig.json",
-						-- Java / Spring (Fallback if you don't use jdtls)
-						"pom.xml",
-						"build.gradle",
-						"mvnw",
-						"gradlew",
-						-- Python
-						"pyproject.toml",
-						"setup.py",
-						"requirements.txt",
-						-- Go
-						"go.mod",
-						"go.work",
-						-- C / C++
-						"compile_commands.json",
-						"Makefile",
-						-- Rust
-						"Cargo.toml",
-						-- PHP
-						"composer.json",
-						-- Monorepos / Build Tools
-						"angular.json",
-						"nx.json",
-						"turbo.json",
-						"lerna.json",
-					},
 				})
 
+				-- Inicialização simplificada dos servidores
 				for _, server in ipairs(servers) do
+					-- Se for ESLint, mantemos a sua lógica customizada
 					if server == "eslint" then
-						-- Specific configuration to simulate VS Code behavior in ESLint.
 						vim.lsp.config("eslint", {
 							on_attach = function(client, bufnr)
 								client.server_capabilities.documentFormattingProvider = true
 								on_attach(client, bufnr)
 							end,
-							capabilities = capabilities,
-
-							-- 1. Ensure that the root directory is the Ionic/Angular project folder (where the package.json file is located)
-							root_markers = { "angular.json", ".eslintrc.json", "package.json", ".git" },
-
-							-- 2. Basic settings
-							settings = {
-								workingDirectory = { mode = "auto" },
-								experimental = { useFlatConfig = false },
-								codeActionOnSave = {
-									enable = true,
-									mode = "all",
-								},
+							root_markers = {
+								-- Version Control
+								".git",
+								-- Node / JS / TS
+								"package.json",
+								"tsconfig.json",
+								"jsconfig.json",
+								-- Java / Spring (Fallback if you don't use jdtls)
+								"pom.xml",
+								"build.gradle",
+								"mvnw",
+								"gradlew",
+								-- Python
+								"pyproject.toml",
+								"setup.py",
+								"requirements.txt",
+								-- Go
+								"go.mod",
+								"go.work",
+								-- C / C++
+								"compile_commands.json",
+								"Makefile",
+								-- Rust
+								"Cargo.toml",
+								-- PHP
+								"composer.json",
+								-- Monorepos / Build Tools
+								"angular.json",
+								"nx.json",
+								"turbo.json",
+								"lerna.json",
 							},
-
-							-- 3. O Pulo do Gato: Injeção de dependência do Workspace
-							-- Isso replica a lógica interna do plugin do VS Code
-							on_init = function(client)
-								local root_dir = client.config.root_dir or vim.fn.getcwd()
-
-								-- Workspace Dependency Injection
-								-- Without this, the TS parser gets lost in the relative paths
-								client.config.settings.workspaceFolder = {
-									uri = vim.uri_from_fname(root_dir),
-									name = vim.fn.fnamemodify(root_dir, ":t"),
-								}
-
-								-- Notify the server about the configuration change immediately
-								client.notify("workspace/didChangeConfiguration", { settings = client.config.settings })
-								return true
-							end,
 						})
 					end
 
+					-- Habilita o servidor (Neovim 0.11 gerencia o resto)
 					vim.lsp.enable(server)
 				end
 
