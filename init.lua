@@ -313,6 +313,66 @@ require("lazy").setup({
 		},
 
 		-----------------------------------------------------------
+		-- Lazydev: Configures LuaLS for editing your Neovim config by lazily updating your workspace libraries
+		-----------------------------------------------------------
+		{
+			"folke/lazydev.nvim",
+			ft = "lua", -- only load on lua files
+			opts = {
+				library = {
+					-- See the configuration section for more details
+					-- Load luvit types when the `vim.uv` word is found
+					{ path = "${3rd}/luv/library", words = { "vim%.uv" } },
+				},
+			},
+		},
+
+		-----------------------------------------------------------
+		-- Friendly-snippets: Biblioteca de templates para várias linguagens
+		-----------------------------------------------------------
+		{ "rafamadriz/friendly-snippets" },
+
+		-----------------------------------------------------------
+		-- Blink.cmp: Completion plugin with support for LSPs, cmdline, signature help, and snippets
+		-----------------------------------------------------------
+		{
+			"saghen/blink.cmp",
+			version = "v1.*",
+			dependencies = { "rafamadriz/friendly-snippets" },
+			opts = {
+				-- Mapeamento manual para ter o comportamento do nvim-cmp
+				keymap = {
+					["<CR>"] = { "accept", "fallback" },
+					["<Tab>"] = { "select_next", "snippet_forward", "fallback" },
+					["<S-Tab>"] = { "select_prev", "snippet_backward", "fallback" },
+				},
+
+				snippets = { preset = "default" },
+
+				completion = {
+					-- preselect = false faz com que nada seja escolhido sozinho
+					-- auto_insert = false garante que o Tab não mude o texto no arquivo enquanto tu navega
+					list = { selection = { preselect = false, auto_insert = false } },
+					menu = { border = "rounded" },
+					documentation = { window = { border = "rounded" }, auto_show = true },
+				},
+
+				sources = {
+					-- add lazydev to your completion providers
+					default = { "lazydev", "lsp", "path", "snippets", "buffer" },
+					providers = {
+						lazydev = {
+							name = "LazyDev",
+							module = "lazydev.integrations.blink",
+							-- make lazydev completions top priority (see `:h blink.cmp`)
+							score_offset = 100,
+						},
+					},
+				},
+			},
+		},
+
+		-----------------------------------------------------------
 		-- Autopairs: To close brackets, quotes, etc. automatically
 		-----------------------------------------------------------
 		{
@@ -376,78 +436,6 @@ require("lazy").setup({
 					contrast = "", -- can be "hard", "soft" or empty string
 				})
 				vim.cmd.colorscheme("gruvbox")
-			end,
-		},
-
-		-----------------------------------------------------------
-		-- Colorscheme: Catppuccin
-		-----------------------------------------------------------
-		-- {
-		-- 	"catppuccin/nvim",
-		-- 	name = "catppuccin",
-		-- 	priority = 1000,
-		-- 	config = function()
-		-- 		require("catppuccin").setup({ flavour = "macchiato" })
-		-- 		vim.cmd.colorscheme("catppuccin")
-		-- 	end,
-		-- },
-
-		-----------------------------------------------------------
-		-- Autocompletion: nvim-cmp + LuaSnip
-		-----------------------------------------------------------
-		{
-			"hrsh7th/nvim-cmp",
-			dependencies = {
-				"hrsh7th/cmp-nvim-lsp", -- LSP completion source
-				"hrsh7th/cmp-buffer", -- Buffer words source
-				"hrsh7th/cmp-path", -- Filesystem paths
-				"L3MON4D3/LuaSnip", -- Snippet engine
-				"saadparwaiz1/cmp_luasnip", -- LuaSnip integration
-			},
-			config = function()
-				local cmp = require("cmp")
-				local luasnip = require("luasnip")
-
-				cmp.setup({
-					window = {
-						completion = cmp.config.window.bordered(),
-						documentation = cmp.config.window.bordered(),
-					},
-					snippet = {
-						expand = function(args)
-							luasnip.lsp_expand(args.body)
-						end,
-					},
-					mapping = cmp.mapping.preset.insert({
-						["<C-f>"] = cmp.mapping.scroll_docs(4),
-						["<C-e>"] = cmp.mapping.abort(),
-						["<CR>"] = cmp.mapping.confirm({ select = true }),
-						["<Tab>"] = cmp.mapping(function(fallback)
-							if cmp.visible() then
-								cmp.select_next_item()
-							elseif luasnip.expand_or_jumpable() then
-								luasnip.expand_or_jump()
-							else
-								fallback()
-							end
-						end, { "i", "s" }),
-						["<S-Tab>"] = cmp.mapping(function(fallback)
-							if cmp.visible() then
-								cmp.select_prev_item()
-							elseif luasnip.jumpable(-1) then
-								luasnip.jump(-1)
-							else
-								fallback()
-							end
-						end, { "i", "s" }),
-					}),
-					sources = cmp.config.sources({
-						{ name = "nvim_lsp" },
-						{ name = "luasnip" },
-						{ name = "buffer" },
-						{ name = "path" },
-					}),
-				})
 			end,
 		},
 
@@ -570,18 +558,6 @@ require("lazy").setup({
 						disabled_filetypes = { "markdown", "md" },
 					}),
 					formatting.stylua,
-					-- (extras_eslint or diagnostics.eslint_d).with({
-					-- 	condition = function(utils)
-					-- 		return utils.root_has_file({
-					-- 			".eslintrc.js",
-					-- 			".eslintrc.cjs",
-					-- 			".eslintrc.json",
-					-- 			"eslint.config.js",
-					-- 			"package.json",
-					-- 		})
-					-- 	end,
-					-- }),
-					-- extras_eslint_actions,
 				}
 
 				local augroup = vim.api.nvim_create_augroup("LspFormatting", {})
@@ -734,9 +710,10 @@ require("lazy").setup({
 				end
 
 				local capabilities = vim.lsp.protocol.make_client_capabilities()
-				local ok_cmp, cmp_nvim_lsp = pcall(require, "cmp_nvim_lsp")
-				if ok_cmp then
-					capabilities = cmp_nvim_lsp.default_capabilities(capabilities)
+
+				local ok_blink, blink = pcall(require, "blink.cmp")
+				if ok_blink then
+					capabilities = blink.get_lsp_capabilities(capabilities)
 				end
 
 				vim.lsp.config("*", {
@@ -754,32 +731,23 @@ require("lazy").setup({
 								on_attach(client, bufnr)
 							end,
 							root_markers = {
-								-- Version Control
 								".git",
-								-- Node / JS / TS
 								"package.json",
 								"tsconfig.json",
 								"jsconfig.json",
-								-- Java / Spring (Fallback if you don't use jdtls)
 								"pom.xml",
 								"build.gradle",
 								"mvnw",
 								"gradlew",
-								-- Python
 								"pyproject.toml",
 								"setup.py",
 								"requirements.txt",
-								-- Go
 								"go.mod",
 								"go.work",
-								-- C / C++
 								"compile_commands.json",
 								"Makefile",
-								-- Rust
 								"Cargo.toml",
-								-- PHP
 								"composer.json",
-								-- Monorepos / Build Tools
 								"angular.json",
 								"nx.json",
 								"turbo.json",
