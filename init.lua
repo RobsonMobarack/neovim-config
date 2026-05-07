@@ -89,6 +89,81 @@ vim.keymap.set("n", "<leader>jr", function()
 	dap.continue()
 end, { desc = "Java: Run/Debug Main Class" })
 
+-- Shortcut to terminate the Java debug session
+vim.keymap.set("n", "<leader>jq", function()
+	require("dap").terminate()
+	require("dap").repl.close()
+end, { desc = "Java: Terminate Debug/App" })
+
+-- Forces the sending of the Hot Code Replace command to the JVM via DAP.
+vim.keymap.set("n", "<leader>jh", function()
+	local session = require("dap").session()
+	if session then
+		session:request("redefineClasses", nil, function(err)
+			if err then
+				vim.notify("Error in HCR: " .. vim.inspect(err), vim.log.levels.ERROR)
+			else
+				vim.notify("Hot Code Replace injected successfully!", vim.log.levels.INFO)
+			end
+		end)
+	else
+		vim.notify("No active debug sessions.", vim.log.levels.WARN)
+	end
+end, { desc = "Java: Force Hot Code Replace (HCR)" })
+
+-- Força a compilação incremental do arquivo atual (Gatilho manual para o HotSwap)
+vim.keymap.set(
+	"n",
+	"<leader>jb",
+	"<Cmd>lua require('jdtls').compile('incremental')<CR>",
+	{ desc = "Java: Build/Compile Incremental (Trigger HCR)" }
+)
+
+vim.keymap.set("n", "<leader>dt", function()
+	require("dapui").toggle()
+end, { desc = "Debug: Toggle UI" })
+
+-- ==========================================
+-- Navegação Avançada de Debug (nvim-dap)
+-- ==========================================
+
+-- Gerenciamento de Breakpoints
+vim.keymap.set("n", "<leader>db", function()
+	require("dap").toggle_breakpoint()
+end, { desc = "Debug: Toggle Breakpoint" })
+vim.keymap.set("n", "<leader>dB", function()
+	require("dap").set_breakpoint(vim.fn.input("Condição do Breakpoint: "))
+end, { desc = "Debug: Breakpoint Condicional" })
+vim.keymap.set("n", "<leader>dx", function()
+	require("dap").clear_breakpoints()
+end, { desc = "Debug: Limpar todos os Breakpoints" })
+
+-- Controles de Fluxo (Você pode usar as teclas F ou a Leader key)
+vim.keymap.set("n", "<F10>", function()
+	require("dap").step_over()
+end, { desc = "Debug: Step Over" })
+vim.keymap.set("n", "<leader>do", function()
+	require("dap").step_over()
+end, { desc = "Debug: Step Over" })
+
+vim.keymap.set("n", "<F11>", function()
+	require("dap").step_into()
+end, { desc = "Debug: Step Into" })
+vim.keymap.set("n", "<leader>di", function()
+	require("dap").step_into()
+end, { desc = "Debug: Step Into" })
+
+vim.keymap.set("n", "<F12>", function()
+	require("dap").step_out()
+end, { desc = "Debug: Step Out" })
+vim.keymap.set("n", "<leader>du", function()
+	require("dap").step_out()
+end, { desc = "Debug: Step Out (Up)" })
+
+-- ==========================================
+-- Tmux
+-- ==========================================
+
 -- Navigate between nvim and tmux
 if not IS_WINDOWS then
 	vim.keymap.set("n", "<C-k>", ":wincmd k<CR>")
@@ -222,11 +297,37 @@ require("lazy").setup({
 					return
 				end
 
-				-- Lombok setup
-				local lombok_path = get_mason_pkg_path("lombok-nightly")
+				-- =========================================================
+				-- Lombok Setup (Cross-platform & Public Repo Friendly)
+				-- =========================================================
+				local function find_lombok_jar()
+					-- 1. Tenta buscar no repositório Maven local (.m2) do usuário
+					-- O '~' é resolvido corretamente para C:\Users\Usuario ou /home/usuario
+					local m2_lombok_dir = vim.fn.expand("~/.m2/repository/org/projectlombok/lombok")
+					-- Procura por arquivos .jar dentro das pastas de versão (ex: 1.18.44/lombok-1.18.44.jar)
+					local m2_jars = vim.fn.glob(m2_lombok_dir .. "/*/*.jar", true, true)
+
+					if m2_jars and #m2_jars > 0 then
+						-- Retorna o último da lista (geralmente a versão mais recente caso haja múltiplas)
+						return m2_jars[#m2_jars]
+					end
+
+					-- 2. Fallback: Verifica se o usuário que clonou o repo instalou via Mason
+					local lombok_mason_path = get_mason_pkg_path("lombok-nightly")
+					if lombok_mason_path and vim.fn.filereadable(lombok_mason_path .. "/lombok.jar") == 1 then
+						return lombok_mason_path .. "/lombok.jar"
+					end
+
+					return nil
+				end
+
+				local lombok_jar_path = find_lombok_jar()
 				local lombok_arg = ""
-				if lombok_path then
-					lombok_arg = "-javaagent:" .. lombok_path .. "/lombok.jar"
+				if lombok_jar_path then
+					lombok_arg = "-javaagent:" .. lombok_jar_path
+				else
+					-- Log opcional caso a pessoa não tenha o Lombok em nenhum dos locais
+					vim.notify("JDTLS: Lombok JAR não encontrado no .m2 ou Mason.", vim.log.levels.WARN)
 				end
 
 				-- 5. Workspace Directory Setup
@@ -290,6 +391,7 @@ require("lazy").setup({
 
 					settings = {
 						java = {
+							autobuild = { enabled = true },
 							errors = { incompleteClasspath = { severity = "warning" } },
 						},
 					},
@@ -325,6 +427,34 @@ require("lazy").setup({
 					{ path = "${3rd}/luv/library", words = { "vim%.uv" } },
 				},
 			},
+		},
+
+		-----------------------------------------------------------
+		-- Nvim-dap-ui: UI for nvim-dap
+		-----------------------------------------------------------
+		{
+			"rcarriga/nvim-dap-ui",
+			dependencies = { "mfussenegger/nvim-dap", "nvim-neotest/nvim-nio" },
+			config = function()
+				local dap = require("dap")
+				local dapui = require("dapui")
+
+				-- 1. Initializes the interface with the default look
+				dapui.setup()
+
+				-- 2. Automation: Opens the interface when debugging begins
+				dap.listeners.after.event_initialized["dapui_config"] = function()
+					dapui.open()
+				end
+
+				-- 3. Automation: Closes the interface when debugging is complete
+				dap.listeners.before.event_terminated["dapui_config"] = function()
+					dapui.close()
+				end
+				dap.listeners.before.event_exited["dapui_config"] = function()
+					dapui.close()
+				end
+			end,
 		},
 
 		-----------------------------------------------------------
@@ -705,7 +835,16 @@ require("lazy").setup({
 				local mti = safe_require("mason-tool-installer")
 				if mti then
 					mti.setup({
-						ensure_installed = { "gotestsum", "eslint_d", "prettier", "prettierd", "stylua", "cspell" },
+						ensure_installed = {
+							"gotestsum",
+							"eslint_d",
+							"prettier",
+							"prettierd",
+							"stylua",
+							"cspell",
+							"java-debug-adapter",
+							"java-test",
+						},
 					})
 				end
 
@@ -785,6 +924,7 @@ require("lazy").setup({
 				vim.keymap.set("n", "<leader>fg", builtin.live_grep, { desc = "Telescope: Live grep" })
 				vim.keymap.set("n", "<leader>fb", builtin.buffers, { desc = "Telescope: List buffers" })
 				vim.keymap.set("n", "<leader>fh", builtin.help_tags, { desc = "Telescope: Help tags" })
+				vim.keymap.set("n", "<leader>fs", builtin.lsp_document_symbols, { desc = "Find Symbols" })
 			end,
 		},
 
