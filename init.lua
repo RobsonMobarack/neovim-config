@@ -76,6 +76,22 @@ vim.g.maplocalleader = "\\"
 -- ============== Key Map Configuration =======================
 ---------------------------------------------------------------
 
+-- Global LSP Keymaps
+vim.api.nvim_create_autocmd("LspAttach", {
+	group = vim.api.nvim_create_augroup("UseLspConfig", { clear = true }),
+	callback = function(ev)
+		local opts = { noremap = true, silent = true, buffer = bufnr }
+		vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
+		vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
+		vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
+		vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, opts)
+		vim.keymap.set("n", "gr", vim.lsp.buf.references, opts)
+		vim.keymap.set("n", "<leader>f", function()
+			vim.lsp.buf.format({ async = true })
+		end, opts)
+	end,
+})
+
 -- space + s saves the file
 vim.keymap.set("n", "<leader>s", ":write<CR>", { silent = true })
 
@@ -216,201 +232,215 @@ require("lazy").setup({
 				"williamboman/mason.nvim",
 			},
 			config = function()
-				-- 1. Function to locate JDTLS installation directory via PATH
-				local function get_jdtls_home()
-					-- Try native Neovim function first
-					local executable = vim.fn.exepath("jdtls")
+				local function setup_jdtls()
+					-- 1. Function to locate JDTLS installation directory via PATH
+					local function get_jdtls_home()
+						-- Try native Neovim function first
+						local executable = vim.fn.exepath("jdtls")
 
-					-- Fallback: If exepath fails, try to force query the system (Windows specific)
-					if executable == "" and IS_WINDOWS then
-						executable = vim.fn.system("where.exe jdtls"):gsub("\n", ""):gsub("\r", "")
-						if vim.fn.filereadable(executable) == 0 then
-							executable = ""
+						-- Fallback: If exepath fails, try to force query the system (Windows specific)
+						if executable == "" and IS_WINDOWS then
+							executable = vim.fn.system("where.exe jdtls"):gsub("\n", ""):gsub("\r", "")
+							if vim.fn.filereadable(executable) == 0 then
+								executable = ""
+							end
 						end
-					end
 
-					if executable == "" then
+						if executable == "" then
+							return nil
+						end
+
+						-- Normalize slashes to forward slashes (/) to avoid Windows backslash hell
+						executable = executable:gsub("\\", "/")
+
+						-- Windows-specific logic
+						if IS_WINDOWS then
+							-- Scoop Installation Handling
+							-- Convert: .../scoop/shims/jdtls.exe -> .../scoop/apps/jdtls/current
+							if executable:match("/shims/") then
+								return executable:gsub("/shims/.*", "/apps/jdtls/current")
+							end
+							-- Manual/Other Windows installs: Assume standard structure (bin/.. -> root)
+							return vim.fn.fnamemodify(executable, ":h:h")
+						end
+
+						-- Linux/macOS logic
+						local resolved_path = (vim.uv or vim.loop).fs_realpath(executable)
+						if resolved_path then
+							return vim.fn.fnamemodify(resolved_path, ":h:h")
+						end
+
 						return nil
 					end
 
-					-- Normalize slashes to forward slashes (/) to avoid Windows backslash hell
-					executable = executable:gsub("\\", "/")
+					local jdtls_home = get_jdtls_home()
 
-					-- Windows-specific logic
+					-- Safety check
+					if not jdtls_home or vim.fn.isdirectory(jdtls_home) == 0 then
+						vim.notify(
+							"JDTLS not found in PATH. Location detected: " .. (jdtls_home or "nil"),
+							vim.log.levels.ERROR
+						)
+						return
+					end
+
+					-- 2. Helper to retrieve extension paths DIRECTLY from filesystem
+					local function get_mason_pkg_path(pkg_name)
+						local mason_root = vim.fn.stdpath("data") .. "/mason/packages/" .. pkg_name
+						if vim.fn.isdirectory(mason_root) == 1 then
+							return mason_root
+						end
+						return nil
+					end
+
+					-- 3. Determine OS Configuration Directory Name
+					local config_dir_name = ""
+					if IS_MAC then
+						config_dir_name = "config_mac"
+					elseif IS_WINDOWS then
+						config_dir_name = "config_win"
+					else
+						config_dir_name = "config_linux"
+					end
+
+					-- 4. Locate Launcher JAR and Lombok
+					local launcher_jar = vim.fn.glob(jdtls_home .. "/plugins/org.eclipse.equinox.launcher_*.jar")
+					if launcher_jar == "" then
+						launcher_jar = vim.fn.glob(jdtls_home .. "/org.eclipse.equinox.launcher_*.jar")
+					end
+
+					if launcher_jar == "" then
+						vim.notify(
+							"JDTLS Launcher JAR not found in detected path: " .. jdtls_home,
+							vim.log.levels.ERROR
+						)
+						return
+					end
+
+					-- =========================================================
+					-- Lombok Setup (Cross-platform & Public Repo Friendly)
+					-- =========================================================
+					local function find_lombok_jar()
+						-- 1. Tenta buscar no repositório Maven local (.m2) do usuário
+						-- O '~' é resolvido corretamente para C:\Users\Usuario ou /home/usuario
+						local m2_lombok_dir = vim.fn.expand("~/.m2/repository/org/projectlombok/lombok")
+						-- Procura por arquivos .jar dentro das pastas de versão (ex: 1.18.44/lombok-1.18.44.jar)
+						local m2_jars = vim.fn.glob(m2_lombok_dir .. "/*/*.jar", true, true)
+
+						if m2_jars and #m2_jars > 0 then
+							-- Retorna o último da lista (geralmente a versão mais recente caso haja múltiplas)
+							return m2_jars[#m2_jars]
+						end
+
+						-- 2. Fallback: Verifica se o usuário que clonou o repo instalou via Mason
+						local lombok_mason_path = get_mason_pkg_path("lombok-nightly")
+						if lombok_mason_path and vim.fn.filereadable(lombok_mason_path .. "/lombok.jar") == 1 then
+							return lombok_mason_path .. "/lombok.jar"
+						end
+
+						return nil
+					end
+
+					local lombok_jar_path = find_lombok_jar()
+					local lombok_arg = ""
+					if lombok_jar_path then
+						lombok_arg = "-javaagent:" .. lombok_jar_path
+					else
+						-- Log opcional caso a pessoa não tenha o Lombok em nenhum dos locais
+						vim.notify("JDTLS: Lombok JAR não encontrado no .m2 ou Mason.", vim.log.levels.WARN)
+					end
+
+					-- 5. Workspace Directory Setup
+					local project_name = vim.fn.fnamemodify(vim.fn.getcwd(), ":p:h:t")
+					local workspace_dir = vim.fn.stdpath("data") .. "/site/java/workspace-root/" .. project_name
 					if IS_WINDOWS then
-						-- Scoop Installation Handling
-						-- Convert: .../scoop/shims/jdtls.exe -> .../scoop/apps/jdtls/current
-						if executable:match("/shims/") then
-							return executable:gsub("/shims/.*", "/apps/jdtls/current")
-						end
-						-- Manual/Other Windows installs: Assume standard structure (bin/.. -> root)
-						return vim.fn.fnamemodify(executable, ":h:h")
+						os.execute("mkdir " .. workspace_dir .. " > nul 2>&1")
+					else
+						os.execute("mkdir -p " .. workspace_dir)
 					end
 
-					-- Linux/macOS logic
-					local resolved_path = (vim.uv or vim.loop).fs_realpath(executable)
-					if resolved_path then
-						return vim.fn.fnamemodify(resolved_path, ":h:h")
+					-- 6. Load Debug and Test Bundles
+					local bundles = {}
+					local java_debug_path = get_mason_pkg_path("java-debug-adapter")
+					if java_debug_path then
+						local java_debug_bundle = vim.fn.glob(
+							java_debug_path .. "/extension/server/com.microsoft.java.debug.plugin-*.jar",
+							true
+						)
+						table.insert(bundles, java_debug_bundle)
+					end
+					local java_test_path = get_mason_pkg_path("java-test")
+					if java_test_path then
+						vim.list_extend(
+							bundles,
+							vim.split(vim.fn.glob(java_test_path .. "/extension/server/*.jar", true), "\n")
+						)
 					end
 
-					return nil
-				end
-
-				local jdtls_home = get_jdtls_home()
-
-				-- Safety check
-				if not jdtls_home or vim.fn.isdirectory(jdtls_home) == 0 then
-					vim.notify(
-						"JDTLS not found in PATH. Location detected: " .. (jdtls_home or "nil"),
-						vim.log.levels.ERROR
-					)
-					return
-				end
-
-				-- 2. Helper to retrieve extension paths DIRECTLY from filesystem
-				local function get_mason_pkg_path(pkg_name)
-					local mason_root = vim.fn.stdpath("data") .. "/mason/packages/" .. pkg_name
-					if vim.fn.isdirectory(mason_root) == 1 then
-						return mason_root
-					end
-					return nil
-				end
-
-				-- 3. Determine OS Configuration Directory Name
-				local config_dir_name = ""
-				if IS_MAC then
-					config_dir_name = "config_mac"
-				elseif IS_WINDOWS then
-					config_dir_name = "config_win"
-				else
-					config_dir_name = "config_linux"
-				end
-
-				-- 4. Locate Launcher JAR and Lombok
-				local launcher_jar = vim.fn.glob(jdtls_home .. "/plugins/org.eclipse.equinox.launcher_*.jar")
-				if launcher_jar == "" then
-					launcher_jar = vim.fn.glob(jdtls_home .. "/org.eclipse.equinox.launcher_*.jar")
-				end
-
-				if launcher_jar == "" then
-					vim.notify("JDTLS Launcher JAR not found in detected path: " .. jdtls_home, vim.log.levels.ERROR)
-					return
-				end
-
-				-- =========================================================
-				-- Lombok Setup (Cross-platform & Public Repo Friendly)
-				-- =========================================================
-				local function find_lombok_jar()
-					-- 1. Tenta buscar no repositório Maven local (.m2) do usuário
-					-- O '~' é resolvido corretamente para C:\Users\Usuario ou /home/usuario
-					local m2_lombok_dir = vim.fn.expand("~/.m2/repository/org/projectlombok/lombok")
-					-- Procura por arquivos .jar dentro das pastas de versão (ex: 1.18.44/lombok-1.18.44.jar)
-					local m2_jars = vim.fn.glob(m2_lombok_dir .. "/*/*.jar", true, true)
-
-					if m2_jars and #m2_jars > 0 then
-						-- Retorna o último da lista (geralmente a versão mais recente caso haja múltiplas)
-						return m2_jars[#m2_jars]
-					end
-
-					-- 2. Fallback: Verifica se o usuário que clonou o repo instalou via Mason
-					local lombok_mason_path = get_mason_pkg_path("lombok-nightly")
-					if lombok_mason_path and vim.fn.filereadable(lombok_mason_path .. "/lombok.jar") == 1 then
-						return lombok_mason_path .. "/lombok.jar"
-					end
-
-					return nil
-				end
-
-				local lombok_jar_path = find_lombok_jar()
-				local lombok_arg = ""
-				if lombok_jar_path then
-					lombok_arg = "-javaagent:" .. lombok_jar_path
-				else
-					-- Log opcional caso a pessoa não tenha o Lombok em nenhum dos locais
-					vim.notify("JDTLS: Lombok JAR não encontrado no .m2 ou Mason.", vim.log.levels.WARN)
-				end
-
-				-- 5. Workspace Directory Setup
-				local project_name = vim.fn.fnamemodify(vim.fn.getcwd(), ":p:h:t")
-				local workspace_dir = vim.fn.stdpath("data") .. "/site/java/workspace-root/" .. project_name
-				if IS_WINDOWS then
-					os.execute("mkdir " .. workspace_dir .. " > nul 2>&1")
-				else
-					os.execute("mkdir -p " .. workspace_dir)
-				end
-
-				-- 6. Load Debug and Test Bundles
-				local bundles = {}
-				local java_debug_path = get_mason_pkg_path("java-debug-adapter")
-				if java_debug_path then
-					local java_debug_bundle =
-						vim.fn.glob(java_debug_path .. "/extension/server/com.microsoft.java.debug.plugin-*.jar", true)
-					table.insert(bundles, java_debug_bundle)
-				end
-				local java_test_path = get_mason_pkg_path("java-test")
-				if java_test_path then
-					vim.list_extend(
-						bundles,
-						vim.split(vim.fn.glob(java_test_path .. "/extension/server/*.jar", true), "\n")
-					)
-				end
-
-				-- 7. JDTLS Configuration Table
-				local config = {
-					cmd = {
-						"java",
-						"-Declipse.application=org.eclipse.jdt.ls.core.id1",
-						"-Dosgi.bundles.defaultStartLevel=4",
-						"-Declipse.product=org.eclipse.jdt.ls.core.product",
-						"-Dlog.protocol=true",
-						"-Dlog.level=ALL",
-						"-Xmx1g",
-						"--add-modules=ALL-SYSTEM",
-						"--add-opens",
-						"java.base/java.util=ALL-UNNAMED",
-						"--add-opens",
-						"java.base/java.lang=ALL-UNNAMED",
-						lombok_arg,
-						"-jar",
-						launcher_jar,
-						"-configuration",
-						jdtls_home .. "/" .. config_dir_name,
-						"-data",
-						workspace_dir,
-					},
-
-					root_dir = require("jdtls.setup").find_root({
-						".git",
-						"mvnw",
-						"gradlew",
-						"pom.xml",
-						"build.gradle",
-					}),
-
-					init_options = { bundles = bundles },
-
-					settings = {
-						java = {
-							autobuild = { enabled = true },
-							errors = { incompleteClasspath = { severity = "warning" } },
+					-- 7. JDTLS Configuration Table
+					local config = {
+						cmd = {
+							"java",
+							"-Declipse.application=org.eclipse.jdt.ls.core.id1",
+							"-Dosgi.bundles.defaultStartLevel=4",
+							"-Declipse.product=org.eclipse.jdt.ls.core.product",
+							"-Dlog.protocol=true",
+							"-Dlog.level=ALL",
+							"-Xmx1g",
+							"--add-modules=ALL-SYSTEM",
+							"--add-opens",
+							"java.base/java.util=ALL-UNNAMED",
+							"--add-opens",
+							"java.base/java.lang=ALL-UNNAMED",
+							lombok_arg,
+							"-jar",
+							launcher_jar,
+							"-configuration",
+							jdtls_home .. "/" .. config_dir_name,
+							"-data",
+							workspace_dir,
 						},
-					},
 
-					on_attach = function(client, bufnr)
-						if client.name == "jdtls" then
-							require("jdtls").setup_dap({ hotcodereplace = "auto" })
-							require("jdtls.dap").setup_dap_main_class_configs()
-						end
+						root_dir = require("jdtls.setup").find_root({
+							".git",
+							"mvnw",
+							"gradlew",
+							"pom.xml",
+							"build.gradle",
+						}),
 
-						-- Java-specific Keymaps
-						local opts = { noremap = true, silent = true, buffer = bufnr }
-						vim.keymap.set("n", "<leader>jo", "<Cmd>lua require'jdtls'.organize_imports()<CR>", opts)
-						vim.keymap.set("n", "<leader>jt", "<Cmd>lua require'jdtls'.test_class()<CR>", opts)
-						vim.keymap.set("n", "<leader>jn", "<Cmd>lua require'jdtls'.test_nearest_method()<CR>", opts)
-					end,
-				}
+						init_options = { bundles = bundles },
 
-				require("jdtls").start_or_attach(config)
+						settings = {
+							java = {
+								autobuild = { enabled = true },
+								errors = { incompleteClasspath = { severity = "warning" } },
+							},
+						},
+
+						on_attach = function(client, bufnr)
+							if client.name == "jdtls" then
+								require("jdtls").setup_dap({ hotcodereplace = "auto" })
+								require("jdtls.dap").setup_dap_main_class_configs()
+							end
+
+							-- Java-specific Keymaps
+							local opts = { noremap = true, silent = true, buffer = bufnr }
+							vim.keymap.set("n", "<leader>jo", "<Cmd>lua require'jdtls'.organize_imports()<CR>", opts)
+							vim.keymap.set("n", "<leader>jt", "<Cmd>lua require'jdtls'.test_class()<CR>", opts)
+							vim.keymap.set("n", "<leader>jn", "<Cmd>lua require'jdtls'.test_nearest_method()<CR>", opts)
+						end,
+					}
+
+					require("jdtls").start_or_attach(config)
+				end
+
+				setup_jdtls()
+
+				vim.api.nvim_create_autocmd("FileType", {
+					pattern = "java",
+					callback = setup_jdtls,
+				})
 			end,
 		},
 
@@ -458,9 +488,20 @@ require("lazy").setup({
 		},
 
 		-----------------------------------------------------------
-		-- Friendly-snippets: Biblioteca de templates para várias linguagens
+		-- LuaSnip & Snippets
 		-----------------------------------------------------------
-		{ "rafamadriz/friendly-snippets" },
+		{
+			"L3MON4D3/LuaSnip",
+			version = "v2.*",
+			build = "make install_jsregexp",
+			dependencies = {
+				"rafamadriz/friendly-snippets", -- O LuaSnip precisa dele para ler os arquivos JSON
+			},
+			config = function()
+				-- O LuaSnip é responsável por carregar a si mesmo
+				require("luasnip.loaders.from_vscode").lazy_load()
+			end,
+		},
 
 		-----------------------------------------------------------
 		-- Blink.cmp: Completion plugin with support for LSPs, cmdline, signature help, and snippets
@@ -468,7 +509,9 @@ require("lazy").setup({
 		{
 			"saghen/blink.cmp",
 			version = "v1.*",
-			dependencies = { "rafamadriz/friendly-snippets" },
+			dependencies = {
+				"L3MON4D3/LuaSnip",
+			},
 			opts = {
 				-- Mapeamento manual para ter o comportamento do nvim-cmp
 				keymap = {
@@ -477,7 +520,7 @@ require("lazy").setup({
 					["<S-Tab>"] = { "select_prev", "snippet_backward", "fallback" },
 				},
 
-				snippets = { preset = "default" },
+				snippets = { preset = "luasnip" },
 
 				completion = {
 					-- preselect = false faz com que nada seja escolhido sozinho
@@ -676,12 +719,8 @@ require("lazy").setup({
 					return ok_req and mod or nil
 				end
 
-				local extras_eslint = try_require("none-ls.diagnostics.eslint_d")
-				local extras_eslint_actions = try_require("none-ls.code_actions.eslint_d")
 				local extras_prettier = try_require("none-ls.formatting.prettierd")
-
 				local formatting = null_ls.builtins.formatting
-				local diagnostics = null_ls.builtins.diagnostics
 
 				local sources = {
 					(extras_prettier or formatting.prettierd or formatting.prettier).with({
@@ -783,18 +822,6 @@ require("lazy").setup({
 				"WhoIsSethDaniel/mason-tool-installer.nvim",
 			},
 			config = function()
-				local function on_attach(client, bufnr)
-					local opts = { noremap = true, silent = true, buffer = bufnr }
-					vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
-					vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
-					vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
-					vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, opts)
-					vim.keymap.set("n", "gr", vim.lsp.buf.references, opts)
-					vim.keymap.set("n", "<leader>f", function()
-						vim.lsp.buf.format({ async = true })
-					end, opts)
-				end
-
 				local mason = safe_require("mason")
 				if mason then
 					mason.setup()
@@ -856,7 +883,6 @@ require("lazy").setup({
 				end
 
 				vim.lsp.config("*", {
-					on_attach = on_attach,
 					capabilities = capabilities,
 				})
 
