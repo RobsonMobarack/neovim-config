@@ -76,6 +76,18 @@ vim.g.maplocalleader = "\\"
 -- ============== Key Map Configuration =======================
 ---------------------------------------------------------------
 
+-----------------------------------------------------------
+-- Key Bind for One Small Step for Vimkind
+-- Specific shortcut for connecting to the Lua debugger (OSV) ignoring the filetype.
+-----------------------------------------------------------
+vim.keymap.set("n", "<leader>dl", function()
+	require("dap").run({
+		type = "nlua",
+		request = "attach",
+		name = "Attach to running Neovim instance",
+	})
+end, { desc = "Lua: Attach to OSV" })
+
 -- Global LSP Keymaps
 vim.api.nvim_create_autocmd("LspAttach", {
 	group = vim.api.nvim_create_augroup("UseLspConfig", { clear = true }),
@@ -99,16 +111,17 @@ vim.keymap.set("n", "<leader>s", ":write<CR>", { silent = true })
 vim.keymap.set("n", "<leader>h", ":noh<CR>", { silent = true })
 
 -- Shortcut to run/debug the current Java class (requires nvim-dap configured in jdtls)
-vim.keymap.set("n", "<leader>jr", function()
+vim.keymap.set("n", "<leader>dr", function()
 	local dap = require("dap")
 	-- Attempts to continue an existing session or start a new one (runs the main method)
 	dap.continue()
 end, { desc = "Java: Run/Debug Main Class" })
 
 -- Shortcut to terminate the Java debug session
-vim.keymap.set("n", "<leader>jq", function()
+vim.keymap.set("n", "<leader>dq", function()
 	require("dap").terminate()
 	require("dap").repl.close()
+	require("dapui").close()
 end, { desc = "Java: Terminate Debug/App" })
 
 -- Forces the sending of the Hot Code Replace command to the JVM via DAP.
@@ -219,6 +232,127 @@ end
 
 require("lazy").setup({
 	spec = {
+		-----------------------------------------------------------
+		-- One Small Step for Vimkind
+		-----------------------------------------------------------
+		{
+			"jbyuki/one-small-step-for-vimkind",
+			dependencies = { "mfussenegger/nvim-dap" },
+			config = function()
+				local dap = require("dap")
+
+				-- Configura o adaptador para se conectar via socket
+				dap.adapters.nlua = function(callback, config)
+					callback({ type = "server", host = config.host or "127.0.0.1", port = config.port or 8086 })
+				end
+
+				-- Configura o perfil de inicialização no nvim-dap
+				dap.configurations.lua = {
+					{
+						type = "nlua",
+						request = "attach",
+						name = "Attach to running Neovim instance",
+					},
+				}
+			end,
+		},
+
+		-----------------------------------------------------------
+		-- Avante.nvim
+		-----------------------------------------------------------
+		{
+			-- "yetone/avante.nvim",
+			"RobsonMobarack/avante.nvim",
+			-- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
+			-- ⚠️ must add this setting! ! !
+			build = vim.fn.has("win32") ~= 0
+					and "powershell -ExecutionPolicy Bypass -File Build.ps1 -BuildFromSource false"
+				or "make",
+			event = "VeryLazy",
+			version = false, -- Never set this value to "*"! Never!
+			---@module 'avante'
+			---@type avante.Config
+			opts = {
+				-- add any opts here
+				-- this file can contain specific instructions for your project
+				instructions_file = "avante.md",
+				provider = "openrouter",
+				providers = {
+					openrouter = {
+						__inherited_from = "openai",
+						endpoint = "https://openrouter.ai/api/v1",
+						api_key_name = "OPENROUTER_API_KEY",
+						model = "nvidia/nemotron-3-nano-30b-a3b:free",
+					},
+					gemini_pro = {
+						api_key_name = "GEMINI_API_KEY",
+						endpoint = "https://generativelanguage.googleapis.com/v1beta/models",
+						model = "gemini-2.5-pro",
+					},
+					gemini_flash = {
+						api_key_name = "GEMINI_API_KEY",
+						endpoint = "https://generativelanguage.googleapis.com/v1beta/models",
+						model = "gemini-2.5-flash",
+					},
+					groq_refactor = {
+						__inherited_from = "openai",
+						api_key_name = "GROQ_API_KEY",
+						endpoint = "https://api.groq.com/openai/v1",
+						model = "llama-3.3-70b-versatile",
+						max_tokens = 4096,
+					},
+					groq_context = {
+						__inherited_from = "openai",
+						api_key_name = "GROQ_API_KEY",
+						endpoint = "https://api.groq.com/openai/v1",
+						model = "meta-llama/llama-4-scout-17b-16e-instruct",
+						max_tokens = 4096,
+					},
+				},
+			},
+			dependencies = {
+				"nvim-lua/plenary.nvim",
+				"MunifTanjim/nui.nvim",
+				--- The below dependencies are optional,
+				"nvim-mini/mini.pick", -- for file_selector provider mini.pick
+				"nvim-telescope/telescope.nvim", -- for file_selector provider telescope
+				"hrsh7th/nvim-cmp", -- autocompletion for avante commands and mentions
+				"ibhagwan/fzf-lua", -- for file_selector provider fzf
+				"stevearc/dressing.nvim", -- for input provider dressing
+				"folke/snacks.nvim", -- for input provider snacks
+				"nvim-tree/nvim-web-devicons", -- or echasnovski/mini.icons
+				{
+					-- support for image pasting
+					"HakonHarnes/img-clip.nvim",
+
+					event = "VeryLazy",
+					opts = {
+
+						-- recommended settings
+						default = {
+							embed_image_as_base64 = false,
+
+							prompt_for_file_name = false,
+							drag_and_drop = {
+
+								insert_mode = true,
+							},
+							-- required for Windows users
+							use_absolute_path = true,
+						},
+					},
+				},
+				{
+					-- Make sure to set this up properly if you have lazy=true
+					"MeanderingProgrammer/render-markdown.nvim",
+					opts = {
+
+						file_types = { "markdown", "Avante" },
+					},
+					ft = { "markdown", "Avante" },
+				},
+			},
+		},
 
 		-----------------------------------------------------------
 		-- Nvim-jdtls: Java LSP (nvim-jdtls) configuration with support for
@@ -457,6 +591,52 @@ require("lazy").setup({
 					{ path = "${3rd}/luv/library", words = { "vim%.uv" } },
 				},
 			},
+		},
+
+		-----------------------------------------------------------
+		-- Nvim-dap: Configuration to work with C and C++
+		-----------------------------------------------------------
+		{
+			"mfussenegger/nvim-dap",
+			config = function()
+				local dap = require("dap")
+
+				-- Identifies the path to the codelldb installed by Mason
+				local codelldb_cmd = vim.fn.stdpath("data") .. "/mason/bin/codelldb"
+				if vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1 then
+					codelldb_cmd = codelldb_cmd .. ".cmd"
+				end
+
+				-- Register the adapter
+				dap.adapters.codelldb = {
+					type = "server",
+					port = "${port}",
+					executable = {
+						command = codelldb_cmd,
+						args = { "--port", "${port}" },
+					},
+				}
+
+				-- Configures the attach/launch process for .c files
+				dap.configurations.c = {
+					{
+						name = "Debug C file",
+						type = "codelldb",
+						request = "launch",
+						program = function()
+							-- Points to the executable that has just been compiled
+							local file = vim.fn.expand("%:r")
+							local extension = (vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1) and ".exe" or ""
+							return vim.fn.getcwd() .. "/" .. file .. extension
+						end,
+						cwd = "${workspaceFolder}",
+						stopOnEntry = false,
+					},
+				}
+
+				-- Reuse the same configuration to work with C++
+				dap.configurations.cpp = dap.configurations.c
+			end,
 		},
 
 		-----------------------------------------------------------
@@ -871,6 +1051,7 @@ require("lazy").setup({
 							"cspell",
 							"java-debug-adapter",
 							"java-test",
+							"codelldb",
 						},
 					})
 				end
@@ -1018,10 +1199,10 @@ vim.keymap.set("n", "<F5>", function()
 	local cmd = ""
 	if IS_WINDOWS then
 		-- Windows: using gcc and && for chaining, executing .exe
-		cmd = string.format('!gcc %s -o %s && "./%s"', file, output, output)
+		cmd = string.format('!gcc -g %s -o %s && "./%s"', file, output, output)
 	else
 		-- Linux/macOS: using gcc and &&, executing ./output
-		cmd = string.format("!gcc %s -o %s && ./%s", file, output, output)
+		cmd = string.format("!gcc -g %s -o %s && ./%s", file, output, output)
 	end
 
 	-- Execute the command
