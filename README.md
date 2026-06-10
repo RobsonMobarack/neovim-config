@@ -8,19 +8,30 @@ This setup is built from the ground up to be my own, reflecting the tools and se
 
 ## ✨ Features
 
-- **Plugin Management with `lazy.nvim`**: Fast, declarative, and easy to manage plugins.
-- **Cross-Platform Engineering**: Logic specifically written to work seamlessly on **Windows, macOS, and Linux**, handling paths and binaries automatically.
-- **Robust LSP Setup**:
-  - Native LSP (`nvim-lspconfig`) with `Mason` for auto-installation.
-  - **Java Specialist**: Advanced `nvim-jdtls` configuration with automatic path detection, debugging (DAP), and testing support.
-  - **Web Dev Ready**: Optimized for Angular/Ionic (custom workspace injection) and React.
-- **Modern UI/UX**:
-  - **Neo-tree**: A feature-rich file explorer with git integration.
-  - **Visuals**: `Gruvbox` theme, consistent rounded borders for all floating windows (Hover, Diagnostics, Completion).
-  - **Trouble.nvim**: A pretty list for showing diagnostics, references, and quickfixes.
-- **Productivity**:
-  - **Auto-Compile C**: Quick run for C files with F5.
-  - **Prettier & ESLint**: Automatic formatting and linting fix on save.
+- **🤖 AI-Powered Development**: Integrated with **Avante.nvim** to provide intelligent code generation, refactoring, and chat, supporting multiple providers out of the box (OpenRouter, Gemini, Groq).
+- **🚀 Blazing Fast Autocompletion**: Powered by **Blink.cmp** for lag-free, snippet-rich autocompletion without the overhead of older plugins.
+- **🛠️ Robust LSP & Formatting Setup**:
+  - Native LSP (`nvim-lspconfig`) leveraging the **new Neovim 0.11 API**.
+  - `Mason` for effortless auto-installation of language servers, linters, and formatters.
+  - Automatic formatting on save using `none-ls` (Prettier, Stylua).
+- **☕ Java Specialist**: Advanced `nvim-jdtls` configuration with automatic path detection, Hot Code Replace (HCR), debugging (DAP), testing support, and Lombok integration.
+- **🐛 Advanced Debugging (DAP)**: Full debug adapter protocol integration with UI panels (`nvim-dap-ui`) for:
+  - **Java**
+  - **C/C++** (`codelldb`)
+  - **Lua** (`one-small-step-for-vimkind` for OSV Neovim plugin debugging)
+- **🌐 Web Dev Ready**: Optimized for Angular/Ionic (custom workspace injection), React, and generic TypeScript/JavaScript workflows.
+- **🔍 Git & Navigation**:
+  - **Telescope**: Powerful fuzzy finder for files, live grep, buffers, and LSP symbols.
+  - **Neogit**: A Magit-like integrated Git interface.
+  - **Neo-tree**: A feature-rich file explorer with git and diagnostic integration.
+  - **nvim-window-picker**: Easily jump between complex split layouts.
+- **🎨 Modern UI/UX**:
+  - **Visuals**: `Gruvbox` theme with consistent rounded borders for all floating windows (Hover, Diagnostics, Completion).
+  - **Trouble.nvim**: A beautiful panel for listing diagnostics, references, and quickfixes.
+  - Native **Inlay Hints** and **Signature Help**.
+- **⚡ Productivity**:
+  - **Auto-Compile C**: Quick save, build, and run for C files with `<F5>`.
+  - **Neogen**: Automated docstring and Javadoc generation.
 
 ## 🛠️ Supported Languages & Tools
 
@@ -30,13 +41,13 @@ This configuration is optimized to work with the following languages out of the 
 `lua` `typescript` `javascript` `angular` `java` `python` `go` `c` `cpp` `html` `css/scss` `json` `yaml` `bash` `sql` `dockerfile`
 
 **Tools:**
-`eslint_d` `prettierd` `gotestsum` `cspell`
+`eslint_d` `prettierd` `gotestsum` `cspell` `clangd`
 
 ## 🚀 Installation
 
 **Prerequisites:**
 
-- **Neovim v0.10.0+** (Required for modern `vim.uv` API support)
+- **Neovim v0.11+** (This configuration utilizes the latest native LSP APIs from 0.11. *Note: 0.12 may present instabilities at the moment*).
 - **Git**
 - A **Nerd Font** (e.g., JetBrainsMono Nerd Font)
 - **Build Tools**: `gcc` (or `clang`), `make`, `unzip`, `npm`, `pip` (needed for Mason to build servers).
@@ -73,7 +84,6 @@ This configuration is optimized to work with the following languages out of the 
     nvim
     ```
 
-    On the first launch, `lazy.nvim` will automatically install all the plugins and `Mason` will install the LSP servers. Once it's done, restart Neovim to ensure everything is loaded correctly.
+    On the first launch, `lazy.nvim` will automatically install all the plugins, and `Mason` will begin installing the LSP servers. Once it's done, restart Neovim to ensure everything is loaded correctly.
 
 Enjoy your new setup!
-
