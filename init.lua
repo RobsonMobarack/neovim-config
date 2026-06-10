@@ -92,15 +92,24 @@ end, { desc = "Lua: Attach to OSV" })
 vim.api.nvim_create_autocmd("LspAttach", {
 	group = vim.api.nvim_create_augroup("UseLspConfig", { clear = true }),
 	callback = function(ev)
-		local opts = { noremap = true, silent = true, buffer = bufnr }
+		local opts = { noremap = true, silent = true, buffer = ev.buf }
 		vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts)
-		vim.keymap.set("n", "K", vim.lsp.buf.hover, opts)
+		vim.keymap.set("n", "K", function()
+			vim.lsp.buf.hover({ border = "rounded" })
+		end, opts)
 		vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, opts)
 		vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, opts)
 		vim.keymap.set("n", "gr", vim.lsp.buf.references, opts)
 		vim.keymap.set("n", "<leader>f", function()
 			vim.lsp.buf.format({ async = true })
 		end, opts)
+		vim.keymap.set("i", "<C-k>", function()
+			vim.lsp.buf.signature_help({ border = "rounded" })
+		end, opts)
+		vim.keymap.set("n", "<leader>ih", function()
+			local is_enabled = vim.lsp.inlay_hint.is_enabled({ bufnr = ev.buf })
+			vim.lsp.inlay_hint.enable(not is_enabled, { bufnr = ev.buf })
+		end, { noremap = true, silent = true, buffer = ev.buf, desc = "Toggle Inlay Hints" })
 	end,
 })
 
@@ -227,6 +236,27 @@ local function safe_require(name)
 end
 
 ---------------------------------------------------------------
+-- =============== Native Treesitter (Nvim 0.12+) =============
+---------------------------------------------------------------
+
+-- Enables Treesitter-based highlighting and indentation globally
+vim.opt.syntax = "off" -- Disables legacy regex-based syntax in Vim
+vim.opt.foldmethod = "expr"
+vim.opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
+vim.opt.foldenable = false -- Prevents files from opening completely collapsed
+
+-- Autocommand to ensure that Treesitter starts in supported buffers
+vim.api.nvim_create_autocmd("FileType", {
+	group = vim.api.nvim_create_augroup("NativeTreesitterStart", { clear = true }),
+	callback = function(ev)
+		local lang = vim.treesitter.language.get_lang(ev.match)
+		if lang and vim.treesitter.language.add(lang) then
+			pcall(vim.treesitter.start, ev.buf, lang)
+		end
+	end,
+})
+
+---------------------------------------------------------------
 -- =============== Lazy Plugin Setup ==========================
 ---------------------------------------------------------------
 
@@ -261,8 +291,8 @@ require("lazy").setup({
 		-- Avante.nvim
 		-----------------------------------------------------------
 		{
-			-- "yetone/avante.nvim",
-			"RobsonMobarack/avante.nvim",
+			"yetone/avante.nvim",
+			-- "RobsonMobarack/avante.nvim",
 			-- if you want to build from source then do `make BUILD_FROM_SOURCE=true`
 			-- ⚠️ must add this setting! ! !
 			build = vim.fn.has("win32") ~= 0
@@ -739,7 +769,6 @@ require("lazy").setup({
 		-----------------------------------------------------------
 		{
 			"danymat/neogen",
-			dependencies = "nvim-treesitter/nvim-treesitter",
 			config = function()
 				require("neogen").setup({
 					enabled = true,
@@ -915,7 +944,7 @@ require("lazy").setup({
 					debug = false,
 					sources = sources,
 					on_attach = function(client, bufnr)
-						if client.supports_method("textDocument/formatting") then
+						if client:supports_method("textDocument/formatting") then
 							vim.api.nvim_clear_autocmds({ group = augroup, buffer = bufnr })
 							vim.api.nvim_create_autocmd("BufWritePre", {
 								group = augroup,
@@ -1214,23 +1243,15 @@ end, { noremap = true, silent = false, desc = "Compile & run C (Auto-detect OS)"
 -- =============== UI Overrides (Force Borders) ===============
 ---------------------------------------------------------------
 
--- 1. Force edges on Hover (Shift+K) and Signature Help
+-- Force edges on Hover (Shift+K) and Signature Help
 local _border = "rounded"
 
-vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(vim.lsp.handlers.hover, {
-	border = _border,
-})
-
-vim.lsp.handlers["textDocument/signatureHelp"] = vim.lsp.with(vim.lsp.handlers.signature_help, {
-	border = _border,
-})
-
--- 2. Force edges on floating diagnostic windows
+-- 1. Force edges on floating diagnostic windows
 vim.diagnostic.config({
 	float = { border = _border },
 })
 
--- 3. Hack to ensure borders in windows that use the standard open_floating_preview API
+-- 2. Hack to ensure borders in windows that use the standard open_floating_preview API
 -- This addresses cases where plugins use the LSP utility function directly.
 local orig_util_open_floating_preview = vim.lsp.util.open_floating_preview
 function vim.lsp.util.open_floating_preview(contents, syntax, opts, ...)
