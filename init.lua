@@ -1,7 +1,7 @@
 ---------------------------------------------------------------
 -- =============== Command tracker ============================
 ---------------------------------------------------------------
-require("command_tracker").setup()
+-- require("command_tracker").setup()
 
 -- ============================================================
 -- Neovim Configuration File
@@ -23,6 +23,17 @@ local IS_LINUX = not IS_WINDOWS and not IS_MAC
 
 -- Forces ESLint 9 to use the old configuration (.eslintrc.json)
 vim.env.ESLINT_USE_FLAT_CONFIG = "false"
+
+---------------------------------------------------------------
+-- =============== Custom Filetype Detection ==================
+---------------------------------------------------------------
+vim.filetype.add({
+	pattern = {
+		-- Angular: Garante que arquivos de template usem o parser correto do Treesitter
+		[".*%.component%.html"] = "htmlangular",
+		[".*/src/app/.*%.html"] = "htmlangular",
+	},
+})
 
 ---------------------------------------------------------------
 -- =============== Basic Editor Settings =====================
@@ -244,17 +255,6 @@ vim.opt.syntax = "off" -- Disables legacy regex-based syntax in Vim
 vim.opt.foldmethod = "expr"
 vim.opt.foldexpr = "v:lua.vim.treesitter.foldexpr()"
 vim.opt.foldenable = false -- Prevents files from opening completely collapsed
-
--- Autocommand to ensure that Treesitter starts in supported buffers
-vim.api.nvim_create_autocmd("FileType", {
-	group = vim.api.nvim_create_augroup("NativeTreesitterStart", { clear = true }),
-	callback = function(ev)
-		local lang = vim.treesitter.language.get_lang(ev.match)
-		if lang and vim.treesitter.language.add(lang) then
-			pcall(vim.treesitter.start, ev.buf, lang)
-		end
-	end,
-})
 
 ---------------------------------------------------------------
 -- =============== Lazy Plugin Setup ==========================
@@ -1169,43 +1169,54 @@ require("lazy").setup({
 		-----------------------------------------------------------
 		{
 			"nvim-treesitter/nvim-treesitter",
-			branch = "master",
+			lazy = false, -- The new nvim-treesitter does not support lazy loading
 			build = ":TSUpdate",
 			config = function()
-				require("nvim-treesitter.configs").setup({
-					ensure_installed = {
-						"lua",
-						"vim",
-						"vimdoc",
-						"bash",
-						"html",
-						"typescript",
-						"javascript",
-						"css",
-						"json",
-						"yaml",
-						"go",
-						"python",
-						"cpp",
-						"c",
-						"sql",
-						"markdown",
-					},
-					sync_install = false,
-					auto_install = true,
-					highlight = {
-						enable = true,
-						disable = function(lang, buf)
-							local max_filesize = 100 * 1024
-							local uv = vim.uv or vim.loop
-							local ok, stats = pcall(uv.fs_stat, vim.api.nvim_buf_get_name(buf))
-							if ok and stats and stats.size > max_filesize then
-								return true
-							end
-						end,
-						additional_vim_regex_highlighting = false,
-					},
-					indent = { enable = true },
+				-- 1. Parser installation (Replaces ensure_installed)
+				local parsers = {
+					"lua",
+					"vim",
+					"vimdoc",
+					"bash",
+					"html",
+					"angular",
+					"typescript",
+					"javascript",
+					"css",
+					"json",
+					"yaml",
+					"go",
+					"python",
+					"cpp",
+					"c",
+					"sql",
+					"markdown",
+					"markdown_inline",
+					"java",
+				}
+
+				-- It is safe to call this function at initialization; it acts as a no-op if the parsers are already present.
+				require("nvim-treesitter").install(parsers)
+
+				-- 2. Highlight and Indentation Settings
+				vim.api.nvim_create_autocmd("FileType", {
+					pattern = "*",
+					callback = function(args)
+						local buf = args.buf
+
+						-- Logic for disabling files > 100KB
+						local max_filesize = 100 * 1024
+						local ok, stats = pcall(vim.uv.fs_stat, vim.api.nvim_buf_get_name(buf))
+						if ok and stats and stats.size > max_filesize then
+							return -- Exit Treesitter without starting it to save performance
+						end
+
+						-- Starts native highlighting (Replaces highlight = { enable = true })
+						pcall(vim.treesitter.start, buf)
+
+						-- Starts indentation based on treesitter (Replaces indent = { enable = true })
+						vim.bo[buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+					end,
 				})
 			end,
 		},
